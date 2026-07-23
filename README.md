@@ -33,7 +33,7 @@ entry point (`demo`) that demonstrates:
   the parsed facts into a Datalog program and querying it.
 
 It reads [resources/people.yaml](resources/people.yaml), a simplified
-YAML-like family tree of 74 people across 8 families that all descend from a
+YAML-like family tree of 106 people across 8 families that all descend from a
 shared pair of common ancestors ("Adam" and "Eve"), and computes:
 
 * `Father`/`Mother` -- each person's two parents, taken directly from the file.

@@ -71,7 +71,18 @@ def testPartnerOfIsNoneWithoutChildren(): Unit \ Assert =
 @Test
 def testReadResourceFileLoadsAllPeople(): Unit \ {Assert, IO} =
     let people = toPeople(parseRecords(readLines("resources/people.yaml")));
-    Assert.assertEq(expected = 74, List.length(people))
+    Assert.assertEq(expected = 106, List.length(people))
+
+@Test
+def testReadResourceFileGrandchildHasTwoGrandfathersAndTwoGrandmothers(): Unit \ {Assert, IO} =
+    let people = toPeople(parseRecords(readLines("resources/people.yaml")));
+    let tree = familyTree(people);
+    let grandfathers = query tree select (grandchild, gf) from Grandfather(grandchild, gf);
+    let grandmothers = query tree select (grandchild, gm) from Grandmother(grandchild, gm);
+    let carolGrandfathers = Vector.filter(match (c, _) -> c == "Carol", grandfathers);
+    let carolGrandmothers = Vector.filter(match (c, _) -> c == "Carol", grandmothers);
+    Assert.assertEq(expected = 2, Vector.length(carolGrandfathers));
+    Assert.assertEq(expected = 2, Vector.length(carolGrandmothers))
 
 @Test
 def testReadResourceFileParsesBothParents(): Unit \ {Assert, IO} =
