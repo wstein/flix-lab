@@ -6,9 +6,10 @@
   age: 930
   gender: female
 
-# Children of Adam & Eve, one per family line below, each married to a
-# spouse who was "born into" no recorded family of their own.
-- name: Arthur
+# The sons of Adam & Eve, per the Book of Adam and Eve. One per family line
+# below, each married to a spouse who was "born into" no recorded family of
+# their own.
+- name: Eliseel
   age: 99
   gender: male
   father: Adam
@@ -16,7 +17,7 @@
 - name: Agnes
   age: 97
   gender: female
-- name: Fred
+- name: Suris
   age: 96
   gender: male
   father: Adam
@@ -24,7 +25,7 @@
 - name: Flora
   age: 94
   gender: female
-- name: Jacob
+- name: Elamiel
   age: 103
   gender: male
   father: Adam
@@ -32,7 +33,7 @@
 - name: Josephine
   age: 101
   gender: female
-- name: Nestor
+- name: Brabal
   age: 88
   gender: male
   father: Adam
@@ -40,7 +41,7 @@
 - name: Norma
   age: 86
   gender: female
-- name: Qasim
+- name: Naat
   age: 108
   gender: male
   father: Adam
@@ -48,7 +49,7 @@
 - name: Queenie
   age: 106
   gender: female
-- name: Umar
+- name: Zarama
   age: 94
   gender: male
   father: Adam
@@ -56,7 +57,7 @@
 - name: Uzma
   age: 92
   gender: female
-- name: Yosef
+- name: Zasam
   age: 100
   gender: male
   father: Adam
@@ -64,7 +65,7 @@
 - name: Yasmin
   age: 98
   gender: female
-- name: Cyrus
+- name: Maathal
   age: 86
   gender: male
   father: Adam
@@ -73,11 +74,54 @@
   age: 84
   gender: female
 
+# The remaining sons and daughters of Adam & Eve, per the Book of Adam and
+# Eve, with no further recorded descendants.
+- name: Anath
+  age: 90
+  gender: male
+  father: Adam
+  mother: Eve
+- name: Phua
+  age: 89
+  gender: female
+  father: Adam
+  mother: Eve
+- name: Iectas
+  age: 95
+  gender: female
+  father: Adam
+  mother: Eve
+- name: Arebica
+  age: 91
+  gender: female
+  father: Adam
+  mother: Eve
+- name: Sifa
+  age: 87
+  gender: female
+  father: Adam
+  mother: Eve
+- name: Tecia
+  age: 93
+  gender: female
+  father: Adam
+  mother: Eve
+- name: Saba
+  age: 85
+  gender: female
+  father: Adam
+  mother: Eve
+- name: Asin
+  age: 97
+  gender: female
+  father: Adam
+  mother: Eve
+
 # Family 1: Smith
 - name: Alice
   age: 71
   gender: female
-  father: Arthur
+  father: Eliseel
   mother: Agnes
 - name: Albert
   age: 74
@@ -105,7 +149,7 @@
 - name: Frank
   age: 68
   gender: male
-  father: Fred
+  father: Suris
   mother: Flora
 - name: Fiona
   age: 66
@@ -133,7 +177,7 @@
 - name: Jack
   age: 75
   gender: male
-  father: Jacob
+  father: Elamiel
   mother: Josephine
 - name: Jane
   age: 73
@@ -161,7 +205,7 @@
 - name: Nora
   age: 60
   gender: female
-  father: Nestor
+  father: Brabal
   mother: Norma
 - name: Noah
   age: 63
@@ -189,7 +233,7 @@
 - name: Quinn
   age: 80
   gender: female
-  father: Qasim
+  father: Naat
   mother: Queenie
 - name: Quincy
   age: 82
@@ -217,7 +261,7 @@
 - name: Uma
   age: 66
   gender: female
-  father: Umar
+  father: Zarama
   mother: Uzma
 - name: Umesh
   age: 69
@@ -245,7 +289,7 @@
 - name: Yara
   age: 72
   gender: female
-  father: Yosef
+  father: Zasam
   mother: Yasmin
 - name: Yusuf
   age: 75
@@ -273,7 +317,7 @@
 - name: Cora
   age: 58
   gender: female
-  father: Cyrus
+  father: Maathal
   mother: Camille
 - name: Carl
   age: 61

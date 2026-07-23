@@ -46,7 +46,7 @@ def testFamilyTreeFatherQueryMatchesFacts(): Unit \ Assert =
 @Test
 def testReadResourceFileLoadsAllPeople(): Unit \ {Assert, IO} =
     let people = toPeople(parseRecords(readLines("resources/people.yaml")));
-    Assert.assertEq(expected = 66, List.length(people))
+    Assert.assertEq(expected = 74, List.length(people))
 
 @Test
 def testReadResourceFileParsesBothParents(): Unit \ {Assert, IO} =
