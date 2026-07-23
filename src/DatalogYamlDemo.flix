@@ -144,13 +144,19 @@ def motherFacts(people: List[Person]): List[(String, String)] =
 ///
 /// * `Father(child, father)` / `Mother(child, mother)` -- the two parents
 ///   of a person, taken directly from the resource file.
+/// * `Grandfather(grandchild, gf)` / `Grandmother(grandchild, gm)` -- the
+///   grandparents of a person, found by joining `Father`/`Mother` one level
+///   up through either parent.
 /// * `Ancestor(descendant, ancestor)` -- the transitive closure of "has a
 ///   parent" over both `Father` and `Mother`, i.e. every ancestor above a
 ///   person, not just their immediate parents.
 ///
 /// See: https://doc.flix.dev/fixpoints.html#injecting-facts-into-datalog
 ///
-def familyTree(people: List[Person]): #{ Ancestor(String, String), Father(String, String), Mother(String, String) | r } =
+def familyTree(people: List[Person]): #{
+    Ancestor(String, String), Father(String, String), Mother(String, String),
+    Grandfather(String, String), Grandmother(String, String) | r
+} =
     let ps = inject personFacts(people) into Person/2;
     let fs = inject fatherFacts(people) into Father/2;
     let ms = inject motherFacts(people) into Mother/2;
@@ -159,8 +165,51 @@ def familyTree(people: List[Person]): #{ Ancestor(String, String), Father(String
         ParentOf(child, parent) :- Mother(child, parent).
         Ancestor(descendant, ancestor) :- ParentOf(descendant, ancestor).
         Ancestor(descendant, ancestor) :- ParentOf(descendant, mid), Ancestor(mid, ancestor).
+        Grandfather(grandchild, gf) :- ParentOf(grandchild, parent), Father(parent, gf).
+        Grandmother(grandchild, gm) :- ParentOf(grandchild, parent), Mother(parent, gm).
     };
-    solve ps, fs, ms, rules project Ancestor, Father, Mother
+    solve ps, fs, ms, rules project Ancestor, Father, Mother, Grandfather, Grandmother
+
+///
+/// Returns the direct children of `parent` (matched by name) in `people`.
+///
+def childrenOf(people: List[Person], parent: String): List[Person] =
+    List.filter(p -> p#father == Some(parent) or p#mother == Some(parent), people)
+
+///
+/// Returns the name of `parent`'s co-parent, i.e. the other parent of any
+/// one of their children, if they have children.
+///
+def partnerOf(people: List[Person], parent: String): Option[String] =
+    match childrenOf(people, parent) {
+        case child :: _ =>
+            if (child#father == Some(parent)) child#mother else child#father
+        case Nil => None
+    }
+
+///
+/// Prints the descendants of `name` as an indented tree, pairing each
+/// person with their partner (the other parent of their children), if any.
+/// This walks `people` directly with plain Flix recursion -- it is not a
+/// Datalog query, just a display built from the same parsed facts.
+///
+def printSubtree(people: List[Person], name: String, depth: Int32): Unit \ IO =
+    let indent = String.repeat(depth * 2, " ");
+    let label = match partnerOf(people, name) {
+        case Some(partner) => "${name} & ${partner}"
+        case None          => name
+    };
+    println("${indent}${label}");
+    childrenOf(people, name)
+        |> List.sortBy(p -> p#name)
+        |> List.forEach(child -> printSubtree(people, child#name, depth + 1))
+
+///
+/// Dumps the full family tree, starting from the shared common ancestor
+/// `root` (e.g. `"Adam"`), down through every descendant.
+///
+def dumpTree(people: List[Person], root: String): Unit \ IO =
+    printSubtree(people, root, 0)
 
 ///
 /// Demonstrates reading a YAML-like file via pure Java IO, building
@@ -189,4 +238,18 @@ pub def demo(): Unit \ IO =
 
     let mothers = query tree select (child, mother) from Mother(child, mother);
     println("Mothers (child -> mother):");
-    mothers |> Vector.forEach(match (c, mo) -> println("  ${c} -> ${mo}"))
+    mothers |> Vector.forEach(match (c, mo) -> println("  ${c} -> ${mo}"));
+    println("");
+
+    let grandfathers = query tree select (grandchild, gf) from Grandfather(grandchild, gf);
+    println("Grandfathers (grandchild -> grandfather):");
+    grandfathers |> Vector.forEach(match (c, gf) -> println("  ${c} -> ${gf}"));
+    println("");
+
+    let grandmothers = query tree select (grandchild, gm) from Grandmother(grandchild, gm);
+    println("Grandmothers (grandchild -> grandmother):");
+    grandmothers |> Vector.forEach(match (c, gm) -> println("  ${c} -> ${gm}"));
+    println("");
+
+    println("Full tree (from the common ancestors):");
+    dumpTree(people, "Adam")

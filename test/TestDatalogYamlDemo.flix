@@ -44,6 +44,31 @@ def testFamilyTreeFatherQueryMatchesFacts(): Unit \ Assert =
     Assert.assertEq(expected = true, Vector.memberOf((("Bob", "Albert")), result))
 
 @Test
+def testFamilyTreeGrandfatherQueryFindsParentsFather(): Unit \ Assert =
+    let tree = familyTree(samplePeople());
+    let result = query tree select (grandchild, gf) from Grandfather(grandchild, gf);
+    Assert.assertEq(expected = true, Vector.memberOf((("Carol", "Albert")), result))
+
+@Test
+def testFamilyTreeGrandmotherQueryFindsParentsMother(): Unit \ Assert =
+    let tree = familyTree(samplePeople());
+    let result = query tree select (grandchild, gm) from Grandmother(grandchild, gm);
+    Assert.assertEq(expected = true, Vector.memberOf((("Carol", "Alice")), result))
+
+@Test
+def testChildrenOfReturnsDirectChildrenOnly(): Unit \ Assert =
+    let names = childrenOf(samplePeople(), "Bob") |> List.map(p -> p#name);
+    Assert.assertEq(expected = "Carol" :: Nil, names)
+
+@Test
+def testPartnerOfFindsTheOtherParent(): Unit \ Assert =
+    Assert.assertEq(expected = Some("Alice"), partnerOf(samplePeople(), "Albert"))
+
+@Test
+def testPartnerOfIsNoneWithoutChildren(): Unit \ Assert =
+    Assert.assertEq(expected = None, partnerOf(samplePeople(), "Carol"))
+
+@Test
 def testReadResourceFileLoadsAllPeople(): Unit \ {Assert, IO} =
     let people = toPeople(parseRecords(readLines("resources/people.yaml")));
     Assert.assertEq(expected = 74, List.length(people))

@@ -37,8 +37,13 @@ YAML-like family tree of 74 people across 8 families that all descend from a
 shared pair of common ancestors ("Adam" and "Eve"), and computes:
 
 * `Father`/`Mother` -- each person's two parents, taken directly from the file.
+* `Grandfather`/`Grandmother` -- each person's grandparents, joining
+  `Father`/`Mother` one level up through either parent.
 * `Ancestor` -- the transitive closure of "has a parent", i.e. every ancestor
   above a person, not just their immediate parents.
+
+It also dumps the full tree, from the common ancestors down through every
+descendant, using plain Flix recursion over the parsed facts (not Datalog).
 
 Run it with:
 
