@@ -2,7 +2,6 @@ import java.nio.file.{Files => Files}
 import java.nio.file.{Path => JPath}
 import java.util.{ArrayList => ArrayList}
 import java.util.{HashMap => HashMap}
-import java.util.{Iterator => JIterator}
 import java.util.{List => JList}
 
 ///
@@ -38,28 +37,12 @@ pub type alias Person = {
 ///
 /// Reads all lines of the text file at `path` using plain Java IO
 /// (`java.nio.file.Files`), converting the resulting `java.util.List`
-/// into a Flix `List`.
+/// into a Flix `List` via `Adaptor.fromList`.
 ///
 def readLines(path: String): List[String] \ IO =
     let p = JPath.of(path);
     let lines: JList[String] = Files.readAllLines(p);
-    javaListToList(lines.iterator())
-
-///
-/// Drains a Java `Iterator` into a Flix `List`.
-///
-/// Note: `it.next()` is bound with `let` *before* the recursive call.
-/// Inlining it as `it.next() :: javaListToList(it)` is unsound here:
-/// the recursive call is evaluated before `it.next()` advances the
-/// iterator, so `it.hasNext()` never becomes false and the call recurses
-/// forever.
-///
-def javaListToList(it: JIterator[String]): List[String] \ IO =
-    if (it.hasNext())
-        let x = it.next();
-        x :: javaListToList(it)
-    else
-        Nil
+    Adaptor.fromList(lines)
 
 ///
 /// Parses the simplified YAML records (a flat list of `- key: value`
@@ -101,31 +84,27 @@ def addKeyValue(m: HashMap[String, String], kv: String): Unit \ IO =
     ()
 
 ///
-/// Converts the parsed Java records into a Flix `List[Person]`.
+/// Converts the parsed Java records into a Flix `List[Person]`, using
+/// `Adaptor.fromList` to drain the `java.util.ArrayList` (upcast to
+/// `java.util.List` since `Adaptor.fromList` is defined over the interface).
 ///
 def toPeople(records: ArrayList[HashMap[String, String]]): List[Person] \ IO =
-    javaRecordsToPeople(records.iterator())
+    let asJList: JList[HashMap[String, String]] = checked_cast(records);
+    Adaptor.fromList(asJList) |> List.map(toPerson)
 
-def javaRecordsToPeople(it: JIterator[HashMap[String, String]]): List[Person] \ IO =
-    if (it.hasNext())
-        let m = it.next();
-        toPerson(m) :: javaRecordsToPeople(it)
-    else
-        Nil
+///
+/// Looks up `key` in `m`, if present.
+///
+def getOpt(m: HashMap[String, String], key: String): Option[String] \ IO =
+    Object.toOption(m.get(key))
 
 def toPerson(m: HashMap[String, String]): Person \ IO =
     let name = m.get("name");
-    let age = m.get("age") |> Object.toOption |> Option.flatMap(Int32.fromString) |> Option.getWithDefault(0);
-    let gender = parseGender(Object.toOption(m.get("gender")));
-    let father = Object.toOption(m.get("father"));
-    let mother = Object.toOption(m.get("mother"));
+    let age = getOpt(m, "age") |> Option.flatMap(Int32.fromString) |> Option.getWithDefault(0);
+    let gender = parseGender(getOpt(m, "gender"));
+    let father = getOpt(m, "father");
+    let mother = getOpt(m, "mother");
     { name = name, age = age, gender = gender, father = father, mother = mother }
-
-///
-/// The `Person(name, age)` facts derived from `people`.
-///
-def personFacts(people: List[Person]): List[(String, Int32)] =
-    List.map(p -> (p#name, p#age), people)
 
 ///
 /// The `Father(child, father)` facts derived from `people`.
@@ -157,7 +136,6 @@ def familyTree(people: List[Person]): #{
     Ancestor(String, String), Father(String, String), Mother(String, String),
     Grandfather(String, String), Grandmother(String, String) | r
 } =
-    let ps = inject personFacts(people) into Person/2;
     let fs = inject fatherFacts(people) into Father/2;
     let ms = inject motherFacts(people) into Mother/2;
     let rules = #{
@@ -168,7 +146,7 @@ def familyTree(people: List[Person]): #{
         Grandfather(grandchild, gf) :- ParentOf(grandchild, parent), Father(parent, gf).
         Grandmother(grandchild, gm) :- ParentOf(grandchild, parent), Mother(parent, gm).
     };
-    solve ps, fs, ms, rules project Ancestor, Father, Mother, Grandfather, Grandmother
+    solve fs, ms, rules project Ancestor, Father, Mother, Grandfather, Grandmother
 
 ///
 /// Returns the direct children of `parent` (matched by name) in `people`.
@@ -177,15 +155,22 @@ def childrenOf(people: List[Person], parent: String): List[Person] =
     List.filter(p -> p#father == Some(parent) or p#mother == Some(parent), people)
 
 ///
-/// Returns the name of `parent`'s co-parent, i.e. the other parent of any
-/// one of their children, if they have children.
+/// Returns the name of `parent`'s co-parent, given `parent`'s children (as
+/// returned by `childrenOf`), i.e. the other parent of any one of them.
 ///
-def partnerOf(people: List[Person], parent: String): Option[String] =
-    match childrenOf(people, parent) {
+def partnerFromChildren(children: List[Person], parent: String): Option[String] =
+    match children {
         case child :: _ =>
             if (child#father == Some(parent)) child#mother else child#father
         case Nil => None
     }
+
+///
+/// Returns the name of `parent`'s co-parent, i.e. the other parent of any
+/// one of their children, if they have children.
+///
+def partnerOf(people: List[Person], parent: String): Option[String] =
+    partnerFromChildren(childrenOf(people, parent), parent)
 
 ///
 /// Prints the descendants of `name` as an indented tree, pairing each
@@ -195,12 +180,13 @@ def partnerOf(people: List[Person], parent: String): Option[String] =
 ///
 def printSubtree(people: List[Person], name: String, depth: Int32): Unit \ IO =
     let indent = String.repeat(depth * 2, " ");
-    let label = match partnerOf(people, name) {
+    let kids = childrenOf(people, name);
+    let label = match partnerFromChildren(kids, name) {
         case Some(partner) => "${name} & ${partner}"
         case None          => name
     };
     println("${indent}${label}");
-    childrenOf(people, name)
+    kids
         |> List.sortBy(p -> p#name)
         |> List.forEach(child -> printSubtree(people, child#name, depth + 1))
 

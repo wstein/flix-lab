@@ -11,13 +11,6 @@ def samplePeople(): List[Person] =
     Nil
 
 @Test
-def testPersonFactsIncludesEveryone(): Unit \ Assert =
-    Assert.assertEq(
-        expected = ("Alice", 71) :: ("Albert", 74) :: ("Bob", 45) :: ("Carol", 22) :: Nil,
-        personFacts(samplePeople())
-    )
-
-@Test
 def testFatherFactsSkipsPeopleWithoutAFather(): Unit \ Assert =
     Assert.assertEq(expected = ("Bob", "Albert") :: ("Carol", "Bob") :: Nil, fatherFacts(samplePeople()))
 
