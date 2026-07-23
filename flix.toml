@@ -4,3 +4,38 @@ description = "test"
 version     = "0.1.0"
 flix        = "0.75.1"
 authors     = ["John Doe <john@example.com>"]
+
+# Transitive dependencies of the vendored org.openrewrite jars below
+# (see [jar-dependencies]), resolvable from Maven Central.
+[mvn-dependencies]
+"com.fasterxml.jackson.core:jackson-core" = "2.21.5"
+"com.fasterxml.jackson.core:jackson-databind" = "2.21.5"
+"com.fasterxml.jackson.core:jackson-annotations" = "2.21"
+"com.fasterxml.jackson.dataformat:jackson-dataformat-smile" = "2.21.5"
+"com.fasterxml.jackson.module:jackson-module-parameter-names" = "2.21.5"
+"com.fasterxml.jackson.datatype:jackson-datatype-jsr310" = "2.21.5"
+"org.jetbrains:annotations" = "26.1.0"
+"org.jspecify:jspecify" = "1.0.0"
+"org.ow2.asm:asm" = "9.10.1"
+"org.ow2.asm:asm-util" = "9.10.1"
+"org.ow2.asm:asm-tree" = "9.10.1"
+"org.ow2.asm:asm-analysis" = "9.10.1"
+"org.antlr:antlr4-runtime" = "4.13.2"
+"org.apache.commons:commons-text" = "1.15.0"
+"org.apache.commons:commons-lang3" = "3.19.0"
+"io.github.classgraph:classgraph" = "4.8.184"
+"io.micrometer:micrometer-core" = "1.9.17"
+"org.yaml:snakeyaml" = "2.6"
+"com.github.ben-manes.caffeine:caffeine" = "2.9.3"
+"org.objenesis:objenesis" = "3.5"
+
+# org.openrewrite:*:0.1.0-SNAPSHOT, a private fork not published to Maven
+# Central. Vendored under vendor/rewrite/ -- see vendor/README.md.
+[jar-dependencies]
+"rewrite-core-0.1.0-SNAPSHOT.jar" = "url:file:///Users/werner/github.com/wstein/flix-lab/vendor/rewrite/rewrite-core-0.1.0-SNAPSHOT.jar"
+"rewrite-java-0.1.0-SNAPSHOT.jar" = "url:file:///Users/werner/github.com/wstein/flix-lab/vendor/rewrite/rewrite-java-0.1.0-SNAPSHOT.jar"
+"rewrite-java-21-0.1.0-SNAPSHOT.jar" = "url:file:///Users/werner/github.com/wstein/flix-lab/vendor/rewrite/rewrite-java-21-0.1.0-SNAPSHOT.jar"
+"rewrite-java-lombok-0.1.0-SNAPSHOT.jar" = "url:file:///Users/werner/github.com/wstein/flix-lab/vendor/rewrite/rewrite-java-lombok-0.1.0-SNAPSHOT.jar"
+"rewrite-properties-0.1.0-SNAPSHOT.jar" = "url:file:///Users/werner/github.com/wstein/flix-lab/vendor/rewrite/rewrite-properties-0.1.0-SNAPSHOT.jar"
+"rewrite-xml-0.1.0-SNAPSHOT.jar" = "url:file:///Users/werner/github.com/wstein/flix-lab/vendor/rewrite/rewrite-xml-0.1.0-SNAPSHOT.jar"
+"rewrite-yaml-0.1.0-SNAPSHOT.jar" = "url:file:///Users/werner/github.com/wstein/flix-lab/vendor/rewrite/rewrite-yaml-0.1.0-SNAPSHOT.jar"

@@ -51,6 +51,34 @@ Run it with:
 flix run --entrypoint demo
 ```
 
+## Java LST + Datalog demo
+
+[src/JavaRewriteDemo.flix](src/JavaRewriteDemo.flix) is a third entry point
+(`rewriteDemo`) that demonstrates deriving Datalog facts from a real Java
+source module, parsed with a fork of
+[OpenRewrite](https://docs.openrewrite.org/)'s Java LST (Lossless Semantic
+Tree) parser -- `org.openrewrite:rewrite-java-21:0.1.0-SNAPSHOT`, vendored
+under [vendor/rewrite/](vendor/rewrite/) since it isn't published to Maven
+Central (see [vendor/README.md](vendor/README.md) for how it's wired into
+`flix.toml`, and why).
+
+It parses [resources/rewrite-sample/Animals.java](resources/rewrite-sample/Animals.java),
+walks the resulting class declarations via plain Java interop (no visitor
+subclassing -- Flix can't subclass OpenRewrite's abstract `TreeVisitor`), and
+injects `Class`/`Extends`/`Implements`/`DeclaresMethod` facts into a Datalog
+program that computes:
+
+* `Inherits` -- the transitive closure of `extends`/`implements`.
+* `AvailableMethod` -- every method callable on a class, declared directly or
+  inherited from an ancestor class or interface.
+
+The vendored jars aren't committed to git; fetch them once first:
+
+```console
+./vendor/setup-rewrite.sh
+flix run --entrypoint rewriteDemo
+```
+
 ## Building
 
 ```console
