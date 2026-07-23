@@ -65,12 +65,19 @@ Central (see [vendor/README.md](vendor/README.md) for how it's wired into
 It parses [resources/rewrite-sample/Animals.java](resources/rewrite-sample/Animals.java),
 walks the resulting class declarations via plain Java interop (no visitor
 subclassing -- Flix can't subclass OpenRewrite's abstract `TreeVisitor`), and
-injects `Class`/`Extends`/`Implements`/`DeclaresMethod` facts into a Datalog
-program that computes:
+injects `Class`/`Extends`/`Implements`/`DeclaresMethod`/`Doc`/`ClassAnnotation`/
+`MethodAnnotation` facts into a Datalog program that computes:
 
 * `Inherits` -- the transitive closure of `extends`/`implements`.
 * `AvailableMethod` -- every method callable on a class, declared directly or
   inherited from an ancestor class or interface.
+* `Domesticated`/`KnowsTrick` -- classes annotated (directly or via an
+  ancestor) `@Domesticated`, or with a method annotated `@Trick`, demonstrating
+  rule-derived facts from `@Annotation`s combined with `Inherits`.
+
+Javadoc comments on classes and methods are extracted too (OpenRewrite parses
+`/** ... */` into a structured `Javadoc.DocComment` tree, not a flat string)
+and printed alongside each class/method.
 
 The vendored jars aren't committed to git; fetch them once first:
 

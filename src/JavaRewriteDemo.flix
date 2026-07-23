@@ -4,21 +4,41 @@ import org.openrewrite.{ExecutionContext => ExecutionContext}
 import org.openrewrite.{InMemoryExecutionContext => InMemoryExecutionContext}
 import org.openrewrite.{SourceFile => SourceFile}
 import org.openrewrite.java.{JavaParser => JavaParser}
+import org.openrewrite.java.tree.{Comment => Comment}
+import org.openrewrite.java.tree.{J => J}
+import org.openrewrite.java.tree.{J$Annotation => Annotation}
 import org.openrewrite.java.tree.{J$ClassDeclaration => ClassDeclaration}
+import org.openrewrite.java.tree.{J$ClassDeclaration$Kind$Type => KindType}
 import org.openrewrite.java.tree.{J$CompilationUnit => CompilationUnit}
 import org.openrewrite.java.tree.{J$MethodDeclaration => MethodDeclaration}
+import org.openrewrite.java.tree.{Javadoc => Javadoc}
+import org.openrewrite.java.tree.{Javadoc$DocComment => DocComment}
+import org.openrewrite.java.tree.{Javadoc$Text => JavadocText}
 import org.openrewrite.java.tree.{Statement => Statement}
+import org.openrewrite.java.tree.{TextComment => TextComment}
 import org.openrewrite.java.tree.{TypeTree => TypeTree}
+
+///
+/// A method declaration extracted from parsed Java source, via OpenRewrite's
+/// Java LST (Lossless Semantic Tree).
+///
+pub type alias MethodInfo = {
+    name        = String,
+    doc         = Option[String],
+    annotations = List[String]
+}
 
 ///
 /// A class or interface declaration extracted from parsed Java source, via
 /// OpenRewrite's Java LST (Lossless Semantic Tree).
 ///
 pub type alias ClassInfo = {
-    name       = String,
-    extends    = Option[String],
-    implements = List[String],
-    methods    = List[String]
+    name        = String,
+    doc         = Option[String],
+    extends     = Option[String],
+    implements  = List[String],
+    annotations = List[String],
+    methods     = List[MethodInfo]
 }
 
 ///
@@ -53,14 +73,72 @@ def typeTreeName(t: TypeTree): String \ IO =
     t.toString()
 
 ///
-/// Returns the names of the methods declared directly in the body of `cd`
-/// (interface methods included, whether abstract or with a body).
+/// Turns a sequence of lines (e.g. from a multi-line Javadoc body) into a
+/// single human-readable line, trimming each and dropping blanks.
 ///
-def declaredMethods(cd: ClassDeclaration): List[String] \ IO =
+def joinLines(raw: String): String =
+    String.lines(raw)
+        |> List.map(String.trim)
+        |> List.filter(l -> not String.isEmpty(l))
+        |> String.intercalate(" ")
+
+///
+/// Returns the plain-text content of a Javadoc comment's body, ignoring
+/// block/inline tags (`@param`, `{@link ...}`, etc.) -- just the `Text`
+/// segments, which is enough for a one-line human-readable summary.
+///
+def javadocText(dc: DocComment): String \ IO =
+    let body: List[Javadoc] = Adaptor.fromList(dc.getBody());
+    body
+        |> List.filter(j -> j instanceof JavadocText)
+        |> List.map(j -> (unchecked_cast(j as JavadocText)).getText())
+        |> String.intercalate(" ")
+        |> joinLines
+
+///
+/// Returns the text of a single `Comment`, whether it's structured
+/// Javadoc (`/** ... */`, parsed into a `Javadoc.DocComment` tree) or a
+/// plain block/line comment (a flat `TextComment`).
+///
+def commentText(c: Comment): Option[String] \ IO =
+    if (c instanceof DocComment)
+        Some(javadocText(unchecked_cast(c as DocComment)))
+    else if (c instanceof TextComment)
+        Some(joinLines((unchecked_cast(c as TextComment)).getText()))
+    else
+        None
+
+///
+/// Returns the text of the doc comment attached to `node`, if any. Every
+/// `J` tree node carries its comments via `getComments()`; we treat the
+/// first one found as the doc comment.
+///
+def docComment(node: J): Option[String] \ IO =
+    Adaptor.fromList(node.getComments())
+        |> List.filterMap(commentText)
+        |> List.head
+
+///
+/// Returns the simple names of a list of annotations (e.g. `Trick` for
+/// `@Trick`).
+///
+def annotationNames(annotations: List[Annotation]): List[String] \ IO =
+    List.map(a -> a.getSimpleName(), annotations)
+
+///
+/// Returns the methods declared directly in the body of `cd` (interface
+/// methods included, whether abstract or with a body), together with
+/// their doc comments and annotations.
+///
+def declaredMethods(cd: ClassDeclaration): List[MethodInfo] \ IO =
     let statements: List[Statement] = Adaptor.fromList(cd.getBody().getStatements());
     statements
         |> List.filter(s -> s instanceof MethodDeclaration)
-        |> List.map(s -> (unchecked_cast(s as MethodDeclaration)).getSimpleName())
+        |> List.map(s -> {
+            let md: MethodDeclaration = unchecked_cast(s as MethodDeclaration);
+            let annotationList: List[Annotation] = Adaptor.fromList(md.getLeadingAnnotations());
+            { name = md.getSimpleName(), doc = docComment(checked_cast(md)), annotations = annotationNames(annotationList) }
+        })
 
 ///
 /// Extracts a `ClassInfo` from a single class/interface declaration.
@@ -68,14 +146,26 @@ def declaredMethods(cd: ClassDeclaration): List[String] \ IO =
 def classInfo(cd: ClassDeclaration): ClassInfo \ IO =
     let extends = Object.toOption(cd.getExtends()) |> Option.map(typeTreeName);
     let implements = Object.toOption(cd.getImplements()) |> Option.map(Adaptor.fromList) |> Option.getWithDefault(Nil) |> List.map(typeTreeName);
-    { name = cd.getSimpleName(), extends = extends, implements = implements, methods = declaredMethods(cd) }
+    let annotationList: List[Annotation] = Adaptor.fromList(cd.getLeadingAnnotations());
+    { name = cd.getSimpleName(), doc = docComment(checked_cast(cd)), extends = extends, implements = implements, annotations = annotationNames(annotationList), methods = declaredMethods(cd) }
 
 ///
-/// Extracts a `ClassInfo` for every class/interface declared across `units`.
+/// `true` if `cd` is an `@interface` (annotation type) declaration, as
+/// opposed to a class, interface, enum, or record.
+///
+def isAnnotationType(cd: ClassDeclaration): Bool \ IO =
+    let kind: KindType = cd.getKind();
+    kind.toString() == "Annotation"
+
+///
+/// Extracts a `ClassInfo` for every class/interface declared across
+/// `units`, excluding `@interface` (annotation type) declarations -- those
+/// describe the annotations used elsewhere, not the class hierarchy itself.
 ///
 def allClassInfo(units: List[CompilationUnit]): List[ClassInfo] \ IO =
     units
         |> List.flatMap(cu -> Adaptor.fromList(cu.getClasses()))
+        |> List.filter(cd -> not isAnnotationType(cd))
         |> List.map(classInfo)
 
 ///
@@ -100,7 +190,29 @@ def implementsFacts(classes: List[ClassInfo]): List[(String, String)] =
 /// The `DeclaresMethod(class, method)` facts derived from `classes`.
 ///
 def declaresMethodFacts(classes: List[ClassInfo]): List[(String, String)] =
-    List.flatMap(c -> List.map(m -> (c#name, m), c#methods), classes)
+    List.flatMap(c -> List.map(m -> (c#name, m#name), c#methods), classes)
+
+///
+/// The `Doc(name, text)` facts for every documented class/interface or
+/// method (qualified as `Class.method`) in `classes`.
+///
+def docFacts(classes: List[ClassInfo]): List[(String, String)] =
+    let classDocs = List.filterMap(c -> Option.map(d -> (c#name, d), c#doc), classes);
+    let methodDocs = List.flatMap(c -> List.filterMap(m -> Option.map(d -> ("${c#name}.${m#name}", d), m#doc), c#methods), classes);
+    classDocs ::: methodDocs
+
+///
+/// The `ClassAnnotation(class, annotation)` facts derived from `classes`.
+///
+def classAnnotationFacts(classes: List[ClassInfo]): List[(String, String)] =
+    List.flatMap(c -> List.map(a -> (c#name, a), c#annotations), classes)
+
+///
+/// The `MethodAnnotation(class, method, annotation)` facts derived from
+/// `classes`.
+///
+def methodAnnotationFacts(classes: List[ClassInfo]): List[(String, String, String)] =
+    List.flatMap(c -> List.flatMap(m -> List.map(a -> (c#name, m#name, a), m#annotations), c#methods), classes)
 
 ///
 /// Builds the Datalog program that computes, from `classes`:
@@ -109,16 +221,26 @@ def declaresMethodFacts(classes: List[ClassInfo]): List[(String, String)] =
 ///   i.e. every class or interface a class derives from, directly or not.
 /// * `AvailableMethod(cls, method)` -- every method callable on `cls`,
 ///   whether declared directly or inherited from an ancestor.
+/// * `Doc(name, text)` -- the doc comment for a class/interface (`name`) or
+///   method (`Class.method`), if any.
+/// * `Domesticated(cls)` -- `cls` (or an ancestor) is annotated
+///   `@Domesticated`.
+/// * `KnowsTrick(cls)` -- `cls` has (or inherited) a method annotated
+///   `@Trick`.
 ///
 /// See: https://doc.flix.dev/fixpoints.html#injecting-facts-into-datalog
 ///
 def classHierarchy(classes: List[ClassInfo]): #{
-    Inherits(String, String), AvailableMethod(String, String) | r
+    Inherits(String, String), AvailableMethod(String, String), Doc(String, String),
+    Domesticated(String), KnowsTrick(String) | r
 } =
     let cs = inject classFacts(classes) into Class/1;
     let es = inject extendsFacts(classes) into Extends/2;
     let is = inject implementsFacts(classes) into Implements/2;
     let ms = inject declaresMethodFacts(classes) into DeclaresMethod/2;
+    let ds = inject docFacts(classes) into Doc/2;
+    let cas = inject classAnnotationFacts(classes) into ClassAnnotation/2;
+    let mas = inject methodAnnotationFacts(classes) into MethodAnnotation/3;
     let rules = #{
         Inherits(sub, sup) :- Extends(sub, sup).
         Inherits(sub, sup) :- Implements(sub, sup).
@@ -126,16 +248,20 @@ def classHierarchy(classes: List[ClassInfo]): #{
         Inherits(sub, sup) :- Implements(sub, mid), Inherits(mid, sup).
         AvailableMethod(cls, m) :- DeclaresMethod(cls, m).
         AvailableMethod(cls, m) :- Inherits(cls, sup), DeclaresMethod(sup, m).
+        Domesticated(cls) :- ClassAnnotation(cls, "Domesticated").
+        Domesticated(cls) :- Inherits(cls, sup), ClassAnnotation(sup, "Domesticated").
+        KnowsTrick(cls) :- MethodAnnotation(cls, m, "Trick").
+        KnowsTrick(cls) :- Inherits(cls, sup), MethodAnnotation(sup, m, "Trick").
     };
-    solve cs, es, is, ms, rules project Inherits, AvailableMethod
+    solve cs, es, is, ms, ds, cas, mas, rules project Inherits, AvailableMethod, Doc, Domesticated, KnowsTrick
 
 ///
 /// Demonstrates parsing a Java source module with a fork of OpenRewrite's
 /// Java LST parser, extracting facts about its classes, interfaces,
-/// `extends`/`implements` relationships and declared methods via plain
-/// Java interop, and injecting those facts into a Datalog program that
-/// computes the full inheritance chain and the set of methods available
-/// on each class (own and inherited).
+/// `extends`/`implements` relationships, declared methods, and Javadoc
+/// comments via plain Java interop, and injecting those facts into a
+/// Datalog program that computes the full inheritance chain and the set
+/// of methods available on each class (own and inherited).
 ///
 pub def rewriteDemo(): Unit \ IO =
     let src = readSource("resources/rewrite-sample/Animals.java");
@@ -151,9 +277,35 @@ pub def rewriteDemo(): Unit \ IO =
     inherits |> Vector.forEach(match (sub, sup) -> println("  ${sub} -> ${sup}"));
     println("");
 
-    println("Available methods (own and inherited):");
+    println("Available methods (own and inherited), with their Javadoc:");
     foreach (c <- classes) {
         let name = c#name;
+        let classDoc = query hierarchy select doc from Doc(name, doc);
+        println("  ${name}${docSuffix(classDoc)}");
         let methods = query hierarchy select method from AvailableMethod(name, method);
-        println("  ${name}: ${methods |> Vector.toList}")
+        foreach (m <- methods |> Vector.toList |> List.sort) {
+            let key = "${name}.${m}";
+            let methodDoc = query hierarchy select doc from Doc(key, doc);
+            println("    ${m}${docSuffix(methodDoc)}")
+        }
+    };
+    println("");
+
+    let domesticated = query hierarchy select cls from Domesticated(cls);
+    println("Domesticated (own or inherited @Domesticated):");
+    domesticated |> Vector.forEach(cls -> println("  ${cls}"));
+    println("");
+
+    let knowsTrick = query hierarchy select cls from KnowsTrick(cls);
+    println("Knows a trick (own or inherited @Trick method):");
+    knowsTrick |> Vector.forEach(cls -> println("  ${cls}"))
+
+///
+/// Formats the first result of a `Doc` query as a trailing " -- text"
+/// suffix, or the empty string if there was no doc comment.
+///
+def docSuffix(doc: Vector[String]): String =
+    match Vector.head(doc) {
+        case Some(text) => " -- ${text}"
+        case None       => ""
     }

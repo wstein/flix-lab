@@ -4,10 +4,14 @@
 /// `resources/rewrite-sample/Animals.java` source file.
 ///
 def sampleClasses(): List[ClassInfo] =
-    { name = "Greeter", extends = None, implements = Nil, methods = "greet" :: Nil } ::
-    { name = "Animal", extends = None, implements = Nil, methods = "eat" :: Nil } ::
-    { name = "Dog", extends = Some("Animal"), implements = "Greeter" :: Nil, methods = "bark" :: "greet" :: Nil } ::
-    { name = "Puppy", extends = Some("Dog"), implements = Nil, methods = "play" :: Nil } ::
+    { name = "Greeter", doc = Some("Something that can greet."), extends = None, implements = Nil, annotations = Nil,
+      methods = { name = "greet", doc = Some("Says hello."), annotations = Nil } :: Nil } ::
+    { name = "Animal", doc = None, extends = None, implements = Nil, annotations = Nil,
+      methods = { name = "eat", doc = None, annotations = Nil } :: Nil } ::
+    { name = "Dog", doc = None, extends = Some("Animal"), implements = "Greeter" :: Nil, annotations = "Domesticated" :: Nil,
+      methods = { name = "bark", doc = None, annotations = "Trick" :: Nil } :: { name = "greet", doc = None, annotations = Nil } :: Nil } ::
+    { name = "Puppy", doc = None, extends = Some("Dog"), implements = Nil, annotations = Nil,
+      methods = { name = "play", doc = None, annotations = Nil } :: Nil } ::
     Nil
 
 @Test
@@ -33,6 +37,21 @@ def testDeclaresMethodFactsFlattensEachClassesMethods(): Unit \ Assert =
     )
 
 @Test
+def testDocFactsIncludesClassAndMethodDocs(): Unit \ Assert =
+    Assert.assertEq(
+        expected = ("Greeter", "Something that can greet.") :: ("Greeter.greet", "Says hello.") :: Nil,
+        docFacts(sampleClasses())
+    )
+
+@Test
+def testClassAnnotationFactsFlattensEachClassesAnnotations(): Unit \ Assert =
+    Assert.assertEq(expected = ("Dog", "Domesticated") :: Nil, classAnnotationFacts(sampleClasses()))
+
+@Test
+def testMethodAnnotationFactsFlattensEachMethodsAnnotations(): Unit \ Assert =
+    Assert.assertEq(expected = ("Dog", "bark", "Trick") :: Nil, methodAnnotationFacts(sampleClasses()))
+
+@Test
 def testClassHierarchyInheritsThroughExtendsAndImplements(): Unit \ Assert =
     let hierarchy = classHierarchy(sampleClasses());
     let result = query hierarchy select (sub, sup) from Inherits(sub, sup);
@@ -50,6 +69,24 @@ def testClassHierarchyAvailableMethodIncludesInheritedMethods(): Unit \ Assert =
     Assert.assertTrue(List.memberOf("greet", methods))
 
 @Test
+def testClassHierarchyDomesticatedPropagatesThroughInheritance(): Unit \ Assert =
+    let hierarchy = classHierarchy(sampleClasses());
+    let result = query hierarchy select cls from Domesticated(cls);
+    let classes = Vector.toList(result);
+    Assert.assertTrue(List.memberOf("Dog", classes));
+    Assert.assertTrue(List.memberOf("Puppy", classes));
+    Assert.assertTrue(not List.memberOf("Animal", classes))
+
+@Test
+def testClassHierarchyKnowsTrickPropagatesThroughInheritance(): Unit \ Assert =
+    let hierarchy = classHierarchy(sampleClasses());
+    let result = query hierarchy select cls from KnowsTrick(cls);
+    let classes = Vector.toList(result);
+    Assert.assertTrue(List.memberOf("Dog", classes));
+    Assert.assertTrue(List.memberOf("Puppy", classes));
+    Assert.assertTrue(not List.memberOf("Animal", classes))
+
+@Test
 def testReadSampleFileParsesAllFourDeclarations(): Unit \ {Assert, IO} =
     let src = readSource("resources/rewrite-sample/Animals.java");
     let classes = allClassInfo(parseJava(src));
@@ -62,6 +99,23 @@ def testReadSampleFileDogExtendsAnimalAndImplementsGreeter(): Unit \ {Assert, IO
     match List.find(c -> c#name == "Dog", classes) {
         case Some(dog) =>
             Assert.assertEq(expected = Some("Animal"), dog#extends);
-            Assert.assertEq(expected = "Greeter" :: Nil, dog#implements)
+            Assert.assertEq(expected = "Greeter" :: Nil, dog#implements);
+            Assert.assertEq(expected = "Domesticated" :: Nil, dog#annotations)
+        case None => Assert.assertTrue(false)
+    }
+
+@Test
+def testReadSampleFileParsesDocAndTrickAnnotation(): Unit \ {Assert, IO} =
+    let src = readSource("resources/rewrite-sample/Animals.java");
+    let classes = allClassInfo(parseJava(src));
+    match List.find(c -> c#name == "Dog", classes) {
+        case Some(dog) =>
+            Assert.assertEq(expected = Some("A domesticated canine."), dog#doc);
+            match List.find(m -> m#name == "bark", dog#methods) {
+                case Some(bark) =>
+                    Assert.assertEq(expected = Some("Makes a barking sound."), bark#doc);
+                    Assert.assertEq(expected = "Trick" :: Nil, bark#annotations)
+                case None => Assert.assertTrue(false)
+            }
         case None => Assert.assertTrue(false)
     }
