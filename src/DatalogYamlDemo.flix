@@ -173,14 +173,35 @@ def partnerOf(people: List[Person], parent: String): Option[String] =
     partnerFromChildren(childrenOf(people, parent), parent)
 
 ///
+/// The parent names (father's, mother's, or both) that `p` should be
+/// indexed under in a `childrenIndex`.
+///
+def parentLinks(p: Person): List[(String, Person)] =
+    (Option.map(father -> (father, p), p#father) |> Option.toList) :::
+        (Option.map(mother -> (mother, p), p#mother) |> Option.toList)
+
+///
+/// Builds a lookup from parent name to that parent's children, in a single
+/// pass over `people`. This is the blueprint for turning `childrenOf`'s
+/// per-call `O(n)` scan (`O(n^2)` total across a whole tree dump) into an
+/// `O(n)` index built once, followed by `O(1)`-ish lookups per node.
+///
+def childrenIndex(people: List[Person]): Map[String, List[Person]] =
+    people
+        |> List.flatMap(parentLinks)
+        |> List.foldLeft((index, pair) -> match pair {
+            case (parent, child) => Map.insertWith(List.append, parent, child :: Nil, index)
+        }, Map.empty())
+
+///
 /// Prints the descendants of `name` as an indented tree, pairing each
 /// person with their partner (the other parent of their children), if any.
-/// This walks `people` directly with plain Flix recursion -- it is not a
-/// Datalog query, just a display built from the same parsed facts.
+/// This walks the precomputed `index` with plain Flix recursion -- it is
+/// not a Datalog query, just a display built from the same parsed facts.
 ///
-def printSubtree(people: List[Person], name: String, depth: Int32): Unit \ IO =
+def printSubtree(index: Map[String, List[Person]], name: String, depth: Int32): Unit \ IO =
     let indent = String.repeat(depth * 2, " ");
-    let kids = childrenOf(people, name);
+    let kids = Map.getWithDefault(name, Nil, index);
     let label = match partnerFromChildren(kids, name) {
         case Some(partner) => "${name} & ${partner}"
         case None          => name
@@ -188,14 +209,16 @@ def printSubtree(people: List[Person], name: String, depth: Int32): Unit \ IO =
     println("${indent}${label}");
     kids
         |> List.sortBy(p -> p#name)
-        |> List.forEach(child -> printSubtree(people, child#name, depth + 1))
+        |> List.forEach(child -> printSubtree(index, child#name, depth + 1))
 
 ///
 /// Dumps the full family tree, starting from the shared common ancestor
-/// `root` (e.g. `"Adam"`), down through every descendant.
+/// `root` (e.g. `"Adam"`), down through every descendant. Builds the
+/// parent -> children index once, up front, rather than re-scanning
+/// `people` for every node visited during the recursive dump.
 ///
 def dumpTree(people: List[Person], root: String): Unit \ IO =
-    printSubtree(people, root, 0)
+    printSubtree(childrenIndex(people), root, 0)
 
 ///
 /// Demonstrates reading a YAML-like file via pure Java IO, building
