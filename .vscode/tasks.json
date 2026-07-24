@@ -1,0 +1,50 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "flix: debug main",
+            "type": "shell",
+            "command": "JAVA_TOOL_OPTIONS='-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=*:5005' ${workspaceFolder}/scripts/flix-fork run --Xdebug --yes",
+            "isBackground": true,
+            "problemMatcher": {
+                "pattern": { "regexp": "^never$" },
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": "^never$",
+                    "endsPattern": "Listening for transport dt_socket"
+                }
+            },
+            "presentation": { "reveal": "always", "panel": "dedicated" }
+        },
+        {
+            "label": "flix: debug demo",
+            "type": "shell",
+            "command": "JAVA_TOOL_OPTIONS='-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=*:5005' ${workspaceFolder}/scripts/flix-fork run --Xdebug --yes --entrypoint demo",
+            "isBackground": true,
+            "problemMatcher": {
+                "pattern": { "regexp": "^never$" },
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": "^never$",
+                    "endsPattern": "Listening for transport dt_socket"
+                }
+            },
+            "presentation": { "reveal": "always", "panel": "dedicated" }
+        },
+        {
+            "label": "flix: debug rewriteDemo",
+            "type": "shell",
+            "command": "JAVA_TOOL_OPTIONS='-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=*:5005' ${workspaceFolder}/scripts/flix-fork run --Xdebug --yes --entrypoint rewriteDemo",
+            "isBackground": true,
+            "problemMatcher": {
+                "pattern": { "regexp": "^never$" },
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": "^never$",
+                    "endsPattern": "Listening for transport dt_socket"
+                }
+            },
+            "presentation": { "reveal": "always", "panel": "dedicated" }
+        }
+    ]
+}

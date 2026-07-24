@@ -1,0 +1,26 @@
+#!/bin/bash
+# Runs a locally-built flix-fork compiler jar (github.com/wstein/flix-fork)
+# instead of any globally installed `flix`, since this project's --Xdebug
+# debug tooling depends on that fork's steppable-debug-info support (not
+# present in upstream Flix).
+#
+# Set FLIX_FORK_JAR to pin a specific jar; otherwise the most recently
+# modified flix-vendor-*.jar in the project root is used.
+set -euo pipefail
+
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+if [ -n "${FLIX_FORK_JAR:-}" ]; then
+    JAR="$FLIX_FORK_JAR"
+else
+    JAR="$(ls -t "$PROJECT_ROOT"/flix-vendor-*.jar 2>/dev/null | head -1)"
+fi
+
+if [ -z "${JAR:-}" ] || [ ! -f "$JAR" ]; then
+    echo "No flix-fork jar found in $PROJECT_ROOT (flix-vendor-*.jar)." >&2
+    echo "Build github.com/wstein/flix-fork and drop the resulting jar there," >&2
+    echo "or set FLIX_FORK_JAR to its path." >&2
+    exit 1
+fi
+
+exec java -jar "$JAR" "$@"

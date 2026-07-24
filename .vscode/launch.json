@@ -1,0 +1,29 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "java",
+            "name": "Flix: attach main",
+            "request": "attach",
+            "hostName": "localhost",
+            "port": 5005,
+            "preLaunchTask": "flix: debug main"
+        },
+        {
+            "type": "java",
+            "name": "Flix: attach demo",
+            "request": "attach",
+            "hostName": "localhost",
+            "port": 5005,
+            "preLaunchTask": "flix: debug demo"
+        },
+        {
+            "type": "java",
+            "name": "Flix: attach rewriteDemo",
+            "request": "attach",
+            "hostName": "localhost",
+            "port": 5005,
+            "preLaunchTask": "flix: debug rewriteDemo"
+        }
+    ]
+}
