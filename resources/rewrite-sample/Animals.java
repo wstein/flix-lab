@@ -23,6 +23,16 @@ class Animal {
      */
     void eat() {
     }
+
+    /**
+     * Determines whether this animal is hungrier than another.
+     *
+     * @param other the animal to compare against
+     * @return true if this animal is hungrier than the other animal
+     */
+    boolean isHungrierThan(Animal other) {
+        return false;
+    }
 }
 
 /**

@@ -13,6 +13,9 @@ import org.openrewrite.java.tree.{J$CompilationUnit => CompilationUnit}
 import org.openrewrite.java.tree.{J$MethodDeclaration => MethodDeclaration}
 import org.openrewrite.java.tree.{Javadoc => Javadoc}
 import org.openrewrite.java.tree.{Javadoc$DocComment => DocComment}
+import org.openrewrite.java.tree.{Javadoc$Parameter => JavadocParameter}
+import org.openrewrite.java.tree.{Javadoc$Reference => JavadocReference}
+import org.openrewrite.java.tree.{Javadoc$Return => JavadocReturn}
 import org.openrewrite.java.tree.{Javadoc$Text => JavadocText}
 import org.openrewrite.java.tree.{Statement => Statement}
 import org.openrewrite.java.tree.{TextComment => TextComment}
@@ -25,7 +28,9 @@ import org.openrewrite.java.tree.{TypeTree => TypeTree}
 pub type alias MethodInfo = {
     name        = String,
     doc         = Option[String],
-    annotations = List[String]
+    annotations = List[String],
+    params      = List[(String, String)],
+    returnDoc   = Option[String]
 }
 
 ///
@@ -83,12 +88,12 @@ def joinLines(raw: String): String =
         |> String.intercalate(" ")
 
 ///
-/// Returns the plain-text content of a Javadoc comment's body, ignoring
-/// block/inline tags (`@param`, `{@link ...}`, etc.) -- just the `Text`
-/// segments, which is enough for a one-line human-readable summary.
+/// Returns the plain-text content of a Javadoc body (a comment's own body,
+/// or a `@param`/`@return` tag's description), ignoring inline tags
+/// (`{@link ...}`, etc.) -- just the `Text` segments, which is enough for
+/// a one-line human-readable summary.
 ///
-def javadocText(dc: DocComment): String \ IO =
-    let body: List[Javadoc] = Adaptor.fromList(dc.getBody());
+def javadocDescription(body: List[Javadoc]): String \ IO =
     body
         |> List.filter(j -> j instanceof JavadocText)
         |> List.map(j -> (unchecked_cast(j as JavadocText)).getText())
@@ -96,27 +101,62 @@ def javadocText(dc: DocComment): String \ IO =
         |> joinLines
 
 ///
-/// Returns the text of a single `Comment`, whether it's structured
-/// Javadoc (`/** ... */`, parsed into a `Javadoc.DocComment` tree) or a
-/// plain block/line comment (a flat `TextComment`).
+/// The summary text, `@param` descriptions, and `@return` description
+/// parsed out of a single Javadoc comment's body.
 ///
-def commentText(c: Comment): Option[String] \ IO =
-    if (c instanceof DocComment)
-        Some(javadocText(unchecked_cast(c as DocComment)))
-    else if (c instanceof TextComment)
-        Some(joinLines((unchecked_cast(c as TextComment)).getText()))
-    else
-        None
+pub type alias JavadocInfo = {
+    summary   = Option[String],
+    params    = List[(String, String)],
+    returnDoc = Option[String]
+}
 
 ///
-/// Returns the text of the doc comment attached to `node`, if any. Every
-/// `J` tree node carries its comments via `getComments()`; we treat the
-/// first one found as the doc comment.
+/// Returns the parameter name a `@param` tag documents. `getName()` is
+/// `null` in this fork (its value seemingly isn't populated by the
+/// parser), but `getNameReference()` -- the reference to the identifier
+/// after `@param` -- still resolves, so read the name from its tree.
 ///
-def docComment(node: J): Option[String] \ IO =
-    Adaptor.fromList(node.getComments())
-        |> List.filterMap(commentText)
-        |> List.head
+def javadocParamName(p: JavadocParameter): Option[String] \ IO =
+    Object.toOption(p.getNameReference())
+        |> Option.flatMap(ref -> Object.toOption((ref: JavadocReference).getTree()))
+        |> Option.map(tree -> tree.toString())
+
+///
+/// Parses a structured Javadoc comment into a `JavadocInfo`.
+///
+def parseDocComment(dc: DocComment): JavadocInfo \ IO =
+    let body: List[Javadoc] = Adaptor.fromList(dc.getBody());
+    let params = body
+        |> List.filter(j -> j instanceof JavadocParameter)
+        |> List.filterMap(j -> {
+            let p: JavadocParameter = unchecked_cast(j as JavadocParameter);
+            javadocParamName(p)
+                |> Option.map(name -> (name, javadocDescription(Adaptor.fromList(p.getDescription()))))
+        });
+    let returnDoc = body
+        |> List.filter(j -> j instanceof JavadocReturn)
+        |> List.map(j -> javadocDescription(Adaptor.fromList((unchecked_cast(j as JavadocReturn)).getDescription())))
+        |> List.head;
+    { summary = Some(javadocDescription(body)), params = params, returnDoc = returnDoc }
+
+///
+/// Parses the doc comment attached to `node`, if any. Every `J` tree node
+/// carries its comments via `getComments()`; we treat the first one found
+/// as the doc comment. A structured Javadoc comment (`/** ... */`) yields
+/// its summary, `@param`s, and `@return`; a plain block/line comment
+/// (a flat `TextComment`) yields only a summary.
+///
+def docCommentInfo(node: J): JavadocInfo \ IO =
+    let comments: List[Comment] = Adaptor.fromList(node.getComments());
+    match List.filter(c -> c instanceof DocComment, comments) {
+        case c :: _ => parseDocComment(unchecked_cast(c as DocComment))
+        case Nil    =>
+            let summary = comments
+                |> List.filter(c -> c instanceof TextComment)
+                |> List.map(c -> joinLines((unchecked_cast(c as TextComment)).getText()))
+                |> List.head;
+            { summary = summary, params = Nil, returnDoc = None }
+    }
 
 ///
 /// Returns the simple names of a list of annotations (e.g. `Trick` for
@@ -128,7 +168,7 @@ def annotationNames(annotations: List[Annotation]): List[String] \ IO =
 ///
 /// Returns the methods declared directly in the body of `cd` (interface
 /// methods included, whether abstract or with a body), together with
-/// their doc comments and annotations.
+/// their doc comments, `@param`/`@return` tags, and annotations.
 ///
 def declaredMethods(cd: ClassDeclaration): List[MethodInfo] \ IO =
     let statements: List[Statement] = Adaptor.fromList(cd.getBody().getStatements());
@@ -137,7 +177,8 @@ def declaredMethods(cd: ClassDeclaration): List[MethodInfo] \ IO =
         |> List.map(s -> {
             let md: MethodDeclaration = unchecked_cast(s as MethodDeclaration);
             let annotationList: List[Annotation] = Adaptor.fromList(md.getLeadingAnnotations());
-            { name = md.getSimpleName(), doc = docComment(checked_cast(md)), annotations = annotationNames(annotationList) }
+            let jd = docCommentInfo(checked_cast(md));
+            { name = md.getSimpleName(), doc = jd#summary, annotations = annotationNames(annotationList), params = jd#params, returnDoc = jd#returnDoc }
         })
 
 ///
@@ -147,7 +188,8 @@ def classInfo(cd: ClassDeclaration): ClassInfo \ IO =
     let extends = Object.toOption(cd.getExtends()) |> Option.map(typeTreeName);
     let implements = Object.toOption(cd.getImplements()) |> Option.map(Adaptor.fromList) |> Option.getWithDefault(Nil) |> List.map(typeTreeName);
     let annotationList: List[Annotation] = Adaptor.fromList(cd.getLeadingAnnotations());
-    { name = cd.getSimpleName(), doc = docComment(checked_cast(cd)), extends = extends, implements = implements, annotations = annotationNames(annotationList), methods = declaredMethods(cd) }
+    let jd = docCommentInfo(checked_cast(cd));
+    { name = cd.getSimpleName(), doc = jd#summary, extends = extends, implements = implements, annotations = annotationNames(annotationList), methods = declaredMethods(cd) }
 
 ///
 /// `true` if `cd` is an `@interface` (annotation type) declaration, as
@@ -215,6 +257,20 @@ def methodAnnotationFacts(classes: List[ClassInfo]): List[(String, String, Strin
     List.flatMap(c -> List.flatMap(m -> List.map(a -> (c#name, m#name, a), m#annotations), c#methods), classes)
 
 ///
+/// The `ParamDoc(class, method, param, text)` facts, from each method's
+/// `@param` tags, derived from `classes`.
+///
+def paramDocFacts(classes: List[ClassInfo]): List[(String, String, String, String)] =
+    List.flatMap(c -> List.flatMap(m -> List.map(match (p, d) -> (c#name, m#name, p, d), m#params), c#methods), classes)
+
+///
+/// The `ReturnDoc(class, method, text)` facts, from each method's
+/// `@return` tag, derived from `classes`.
+///
+def returnDocFacts(classes: List[ClassInfo]): List[(String, String, String)] =
+    List.flatMap(c -> List.filterMap(m -> Option.map(d -> (c#name, m#name, d), m#returnDoc), c#methods), classes)
+
+///
 /// Builds the Datalog program that computes, from `classes`:
 ///
 /// * `Inherits(sub, sup)` -- the transitive closure of `extends`/`implements`,
@@ -223,6 +279,8 @@ def methodAnnotationFacts(classes: List[ClassInfo]): List[(String, String, Strin
 ///   whether declared directly or inherited from an ancestor.
 /// * `Doc(name, text)` -- the doc comment for a class/interface (`name`) or
 ///   method (`Class.method`), if any.
+/// * `ParamDoc(class, method, param, text)` / `ReturnDoc(class, method, text)`
+///   -- a method's `@param`/`@return` Javadoc tags.
 /// * `Domesticated(cls)` -- `cls` (or an ancestor) is annotated
 ///   `@Domesticated`.
 /// * `KnowsTrick(cls)` -- `cls` has (or inherited) a method annotated
@@ -232,6 +290,7 @@ def methodAnnotationFacts(classes: List[ClassInfo]): List[(String, String, Strin
 ///
 def classHierarchy(classes: List[ClassInfo]): #{
     Inherits(String, String), AvailableMethod(String, String), Doc(String, String),
+    ParamDoc(String, String, String, String), ReturnDoc(String, String, String),
     Domesticated(String), KnowsTrick(String) | r
 } =
     let cs = inject classFacts(classes) into Class/1;
@@ -241,6 +300,8 @@ def classHierarchy(classes: List[ClassInfo]): #{
     let ds = inject docFacts(classes) into Doc/2;
     let cas = inject classAnnotationFacts(classes) into ClassAnnotation/2;
     let mas = inject methodAnnotationFacts(classes) into MethodAnnotation/3;
+    let pds = inject paramDocFacts(classes) into ParamDoc/4;
+    let rds = inject returnDocFacts(classes) into ReturnDoc/3;
     let rules = #{
         Inherits(sub, sup) :- Extends(sub, sup).
         Inherits(sub, sup) :- Implements(sub, sup).
@@ -253,7 +314,8 @@ def classHierarchy(classes: List[ClassInfo]): #{
         KnowsTrick(cls) :- MethodAnnotation(cls, m, "Trick").
         KnowsTrick(cls) :- Inherits(cls, sup), MethodAnnotation(sup, m, "Trick").
     };
-    solve cs, es, is, ms, ds, cas, mas, rules project Inherits, AvailableMethod, Doc, Domesticated, KnowsTrick
+    solve cs, es, is, ms, ds, cas, mas, pds, rds, rules
+        project Inherits, AvailableMethod, Doc, ParamDoc, ReturnDoc, Domesticated, KnowsTrick
 
 ///
 /// Demonstrates parsing a Java source module with a fork of OpenRewrite's
@@ -286,7 +348,11 @@ pub def rewriteDemo(): Unit \ IO =
         foreach (m <- methods |> Vector.toList |> List.sort) {
             let key = "${name}.${m}";
             let methodDoc = query hierarchy select doc from Doc(key, doc);
-            println("    ${m}${docSuffix(methodDoc)}")
+            println("    ${m}${docSuffix(methodDoc)}");
+            let params = query hierarchy select (param, desc) from ParamDoc(name, m, param, desc);
+            params |> Vector.forEach(match (param, desc) -> println("      @param ${param}: ${desc}"));
+            let returnDoc = query hierarchy select desc from ReturnDoc(name, m, desc);
+            returnDoc |> Vector.forEach(desc -> println("      @return: ${desc}"))
         }
     };
     println("");

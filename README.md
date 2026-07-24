@@ -77,7 +77,8 @@ injects `Class`/`Extends`/`Implements`/`DeclaresMethod`/`Doc`/`ClassAnnotation`/
 
 Javadoc comments on classes and methods are extracted too (OpenRewrite parses
 `/** ... */` into a structured `Javadoc.DocComment` tree, not a flat string)
-and printed alongside each class/method.
+and printed alongside each class/method, along with each method's `@param`/
+`@return` tags (`ParamDoc`/`ReturnDoc` facts).
 
 The vendored jars aren't committed to git; fetch them once first:
 
