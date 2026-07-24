@@ -1,0 +1,9 @@
+#!/bin/bash
+# Launches the Flix DAP<->JDI debug adapter. Spawned by VS Code (via the
+# "flix" debugger contributed in the sibling vscode-extension/), which
+# communicates with it over stdio using the Debug Adapter Protocol.
+set -euo pipefail
+
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+exec java --add-modules jdk.jdi "$DIR/src/FlixDebugAdapter.java"

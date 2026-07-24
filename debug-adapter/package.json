@@ -1,0 +1,51 @@
+{
+    "name": "flix-debug",
+    "displayName": "Flix Debug (minimal)",
+    "description": "Attach a debugger to a running Flix program built with --Xdebug (wstein/flix-fork) and set breakpoints directly in .flix files.",
+    "version": "0.0.1",
+    "publisher": "wstein",
+    "private": true,
+    "engines": {
+        "vscode": "^1.60.0"
+    },
+    "categories": [
+        "Debuggers"
+    ],
+    "activationEvents": [
+        "onDebugResolve:flix",
+        "onDebugDynamicConfigurations:flix"
+    ],
+    "contributes": {
+        "breakpoints": [
+            {
+                "language": "flix"
+            }
+        ],
+        "debuggers": [
+            {
+                "type": "flix",
+                "label": "Flix",
+                "languages": [
+                    "flix"
+                ],
+                "program": "./bin/flix-debug-adapter",
+                "configurationAttributes": {
+                    "attach": {
+                        "properties": {
+                            "hostName": {
+                                "type": "string",
+                                "description": "JDWP host to attach to.",
+                                "default": "localhost"
+                            },
+                            "port": {
+                                "type": "number",
+                                "description": "JDWP port to attach to.",
+                                "default": 5005
+                            }
+                        }
+                    }
+                }
+            }
+        ]
+    }
+}
