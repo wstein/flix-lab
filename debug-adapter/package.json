@@ -11,10 +11,6 @@
     "categories": [
         "Debuggers"
     ],
-    "activationEvents": [
-        "onDebugResolve:flix",
-        "onDebugDynamicConfigurations:flix"
-    ],
     "contributes": {
         "breakpoints": [
             {
