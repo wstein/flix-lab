@@ -1,17 +1,22 @@
 #!/usr/bin/env python3
 """
 Drives debug-adapter/bin/flix-debug-adapter through a real debug session
-(initialize, attach, setBreakpoints, configurationDone, wait for a
-breakpoint hit, stackTrace/scopes/variables, continue, disconnect),
+(initialize, attach or launch, setBreakpoints, configurationDone, wait for
+a breakpoint hit, stackTrace/scopes/variables, continue, disconnect),
 simulating exactly what VS Code's DAP client would send.
 
-Usage: dap_client_test.py <path-to-flix-file> <line> [host] [port]
+Usage:
+  dap_client_test.py <path-to-flix-file> <line> [host] [port]
+    Attaches to a Flix program already running, suspended, with a JDWP
+    agent listening on the given host/port (see the "flix: debug ..." VS
+    Code tasks, or run manually:
+      JAVA_TOOL_OPTIONS='-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=*:5005' \\
+        ./scripts/flix-fork run --Xdebug --yes --entrypoint demo
 
-Expects a Flix program already running, suspended, with a JDWP agent
-listening on the given host/port (see the "flix: debug ..." VS Code tasks,
-or run manually:
-  JAVA_TOOL_OPTIONS='-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=*:5005' \\
-    ./scripts/flix-fork run --Xdebug --yes --entrypoint demo
+  dap_client_test.py --launch <path-to-flix-file> <line> [entryPoint]
+    Has the adapter spawn `scripts/flix-fork run --Xdebug` itself instead
+    (no separate process to start beforehand); entryPoint defaults to
+    "main".
 """
 import json
 import subprocess
@@ -97,10 +102,14 @@ class DapClient:
 
 
 def main():
-    flix_file = sys.argv[1]
-    line = int(sys.argv[2])
-    host = sys.argv[3] if len(sys.argv) > 3 else "localhost"
-    port = int(sys.argv[4]) if len(sys.argv) > 4 else 5005
+    args = sys.argv[1:]
+    launch = False
+    if args and args[0] == "--launch":
+        launch = True
+        args = args[1:]
+
+    flix_file = args[0]
+    line = int(args[1])
 
     proc = subprocess.Popen(
         [str(ADAPTER)],
@@ -109,23 +118,35 @@ def main():
         stderr=sys.stderr,
     )
     try:
-        run_session(proc, flix_file, line, host, port)
+        client = DapClient(proc)
+        print("-> initialize")
+        r = client.request("initialize", {})
+        assert r["success"], r
+        client.wait_event("initialized")
+
+        if launch:
+            entry_point = args[2] if len(args) > 2 else "main"
+            flix_fork = str(Path(__file__).resolve().parent.parent.parent / "scripts" / "flix-fork")
+            print(f"-> launch {flix_file} (entryPoint={entry_point}, spawned by the adapter itself)")
+            r = client.request("launch", {
+                "program": flix_file,
+                "entryPoint": entry_point,
+                "flixCommand": [flix_fork],
+            }, timeout=40)
+            assert r["success"], r
+        else:
+            host = args[2] if len(args) > 2 else "localhost"
+            port = int(args[3]) if len(args) > 3 else 5005
+            print(f"-> attach {host}:{port}")
+            r = client.request("attach", {"hostName": host, "port": port})
+            assert r["success"], r
+
+        run_session(client, flix_file, line)
     finally:
         proc.terminate()
 
 
-def run_session(proc, flix_file, line, host, port):
-    client = DapClient(proc)
-
-    print("-> initialize")
-    r = client.request("initialize", {})
-    assert r["success"], r
-    client.wait_event("initialized")
-
-    print(f"-> attach {host}:{port}")
-    r = client.request("attach", {"hostName": host, "port": port})
-    assert r["success"], r
-
+def run_session(client, flix_file, line):
     print(f"-> setBreakpoints {flix_file}:{line}")
     r = client.request("setBreakpoints", {
         "source": {"path": flix_file},

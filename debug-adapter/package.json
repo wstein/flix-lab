@@ -39,6 +39,40 @@
                                 "default": 5005
                             }
                         }
+                    },
+                    "launch": {
+                        "required": [
+                            "program"
+                        ],
+                        "properties": {
+                            "program": {
+                                "type": "string",
+                                "description": "Path to the .flix file or project directory to run.",
+                                "default": "${file}"
+                            },
+                            "entryPoint": {
+                                "type": "string",
+                                "description": "Flix --entrypoint to run, if not the default main()."
+                            },
+                            "cwd": {
+                                "type": "string",
+                                "description": "Working directory to run flix in (defaults to the nearest flix.toml directory above 'program')."
+                            },
+                            "flixCommand": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                },
+                                "description": "Command used to invoke flix (defaults to [\"flix\"]; e.g. [\"${workspaceFolder}/scripts/flix-fork\"] for this project's --Xdebug fork build)."
+                            },
+                            "args": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                },
+                                "description": "Extra arguments passed to the running Flix program."
+                            }
+                        }
                     }
                 }
             }

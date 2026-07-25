@@ -21,16 +21,19 @@ that stratum. This adapter is a thin, purpose-built bridge instead:
 - [src/FlixDebugAdapter.java](src/FlixDebugAdapter.java) speaks DAP over
   stdio (a hand-rolled JSON codec -- no dependencies to fetch) and backs it
   with `com.sun.jdi`, attaching to the JDWP port a `flix run --Xdebug`
-  process is listening on.
+  process is listening on -- either one already running (`attach`), or one
+  this adapter spawns itself with a JDWP agent on a free port it picks
+  (`launch`).
 - `setBreakpoints` resolves a `.flix` file + line against the `"Flix"`
   stratum (falling back to the class's own default stratum for classes with
   no cross-file inlining, which don't get an SMAP at all -- their ordinary
   `LineNumberTable` already holds real `.flix` line numbers). Classes not
   loaded yet get a deferred breakpoint via a `ClassPrepareRequest`, exactly
   like `jdb` does.
-- Only `threads`/`stackTrace`/`scopes`/`variables`/`continue`/`next`/
-  `stepIn`/`stepOut`/`pause` are implemented -- enough to hit a breakpoint
-  and inspect the call stack and locals, not a general-purpose Java debugger.
+- Only `threads`/`stackTrace`/`scopes`/`variables`/`evaluate`/`continue`/
+  `next`/`stepIn`/`stepOut`/`pause` are implemented -- enough to hit a
+  breakpoint and inspect the call stack and locals, not a general-purpose
+  Java debugger.
 
 ## Install (unpublished, local extension)
 
@@ -55,25 +58,51 @@ re-running `install.sh` and reloading the window to take effect.
 ## Use
 
 See the parent project's README for the full setup (the `--Xdebug` fork
-jar, `scripts/flix-fork`, the background tasks that start each example
-suspended under JDWP). Once this extension is installed, add `"type":
-"flix"` attach configurations to `.vscode/launch.json` instead of `"type":
-"java"` ones, e.g.:
+jar, `scripts/flix-fork`). Once this extension is installed, add `"type":
+"flix"` configurations to `.vscode/launch.json` instead of `"type": "java"`
+ones. Two request modes are supported:
 
-```json
-{
-    "type": "flix",
-    "name": "Flix: attach demo",
-    "request": "attach",
-    "hostName": "localhost",
-    "port": 5005,
-    "preLaunchTask": "flix: debug demo"
-}
-```
+- **`launch`**: this adapter spawns `flix run --Xdebug` itself (with a JDWP
+  agent listening on a freshly-picked free port) and attaches to it, so
+  there's no separate task to start beforehand:
 
-Set a breakpoint directly in the `.flix` file's gutter before starting --
-the target JVM is suspended at startup and won't run any code until this
-adapter attaches and resumes it.
+  ```json
+  {
+      "type": "flix",
+      "name": "Flix: launch demo",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/DatalogYamlDemo.flix",
+      "entryPoint": "demo",
+      "flixCommand": ["${workspaceFolder}/scripts/flix-fork"]
+  }
+  ```
+
+  `flixCommand` defaults to `["flix"]`; it's pointed at
+  `scripts/flix-fork` here because a plain `flix` on `PATH` wouldn't have
+  `--Xdebug` support. `program`'s directory (or the nearest `flix.toml`
+  above it) becomes the working directory `flix run` executes in, unless
+  `cwd` is given explicitly. The spawned process's output is streamed back
+  as Debug Console output, and stopping the session also kills it (unlike
+  `attach`, which never owns the target process's lifecycle).
+
+- **`attach`**: connects to a JVM you've already started yourself,
+  suspended, with a JDWP agent listening (e.g. via a shell script or a
+  background task):
+
+  ```json
+  {
+      "type": "flix",
+      "name": "Flix: attach demo",
+      "request": "attach",
+      "hostName": "localhost",
+      "port": 5005,
+      "preLaunchTask": "flix: debug demo"
+  }
+  ```
+
+Either way, set a breakpoint directly in the `.flix` file's gutter before
+starting -- the target JVM is suspended at startup and won't run any code
+until this adapter attaches and resumes it.
 
 ## Testing without VS Code
 

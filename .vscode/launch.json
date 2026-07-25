@@ -24,6 +24,16 @@
             "hostName": "localhost",
             "port": 5005,
             "preLaunchTask": "flix: debug rewriteDemo"
+        },
+        {
+            "type": "flix",
+            "name": "Flix: launch rewriteDemo",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/JavaRewriteDemo.flix",
+            "entryPoint": "rewriteDemo",
+            "flixCommand": [
+                "${workspaceFolder}/scripts/flix-fork"
+            ]
         }
     ]
 }
