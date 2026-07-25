@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<idea-plugin>
+    <extensions defaultExtensionNs="com.intellij">
+        <textmate.bundleProvider implementation="dev.wstein.flixplugin.FlixTextMateBundleProvider"/>
+    </extensions>
+</idea-plugin>

@@ -1,0 +1,75 @@
+<!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
+<idea-plugin>
+    <id>dev.wstein.flix-jetbrains-plugin</id>
+    <name>Flix</name>
+    <vendor url="https://github.com/wstein/flix-lab">wstein</vendor>
+    <description><![CDATA[
+        <p>Flix language support and <code>--Xdebug</code> JDWP breakpoint debugging for the
+        <a href="https://github.com/wstein/flix-fork">wstein/flix-fork</a> Flix compiler build.</p>
+        <p>Reuses the exact same <code>flix lsp</code> language server the official VS Code
+        extension downloads (no reimplementation of completion/diagnostics/hover), and the exact
+        same <code>FlixDebugAdapter.java</code> DAP&#8596;JDI bridge as this project's VS Code
+        debug adapter, via <a href="https://plugins.jetbrains.com/plugin/23257-lsp4ij">LSP4IJ</a>'s
+        generic LSP and DAP clients.</p>
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.redhat.devtools.lsp4ij</depends>
+    <!-- Optional, matching LSP4IJ's own plugin-textmate.xml precedent for the identical
+         com.intellij.textmate.bundleProvider extension point (see plugin-textmate.xml here): the
+         TextMate plugin is bundled with the IDE and normally always enabled, but declaring it as a
+         hard, non-optional dependency would make this plugin fail to load entirely on the rare
+         setup where it's disabled, for a feature (baseline highlighting fallback) that's supposed
+         to be non-essential. -->
+    <depends optional="true" config-file="plugin-textmate.xml">org.jetbrains.plugins.textmate</depends>
+
+    <extensions defaultExtensionNs="com.redhat.devtools.lsp4ij">
+
+        <server id="flixLanguageServer"
+                name="Flix Language Server"
+                factoryClass="dev.wstein.flixplugin.FlixLanguageServerFactory">
+            <description><![CDATA[
+            The Flix "Plain-LSP" server (<code>flix lsp</code>), resolved from the open project's
+            <code>flix-vendor-*.jar</code> (or <code>$FLIX_FORK_JAR</code>), the same way
+            <code>scripts/flix-fork</code> does.
+            ]]></description>
+        </server>
+
+        <!-- fileNamePatternMapping (rather than languageMapping/fileTypeMapping) is used
+             deliberately: it's the mapping LSP4IJ's own docs recommend when the plugin doesn't
+             register an IntelliJ FileType/Language for the extension, and it's the one that
+             doesn't disable TextMate-based syntax coloration. -->
+        <fileNamePatternMapping patterns="*.flix"
+                                serverId="flixLanguageServer"
+                                languageId="flix"/>
+
+        <debugAdapterServer id="flixDebugAdapter"
+                            name="Flix (--Xdebug attach)"
+                            factoryClass="dev.wstein.flixplugin.FlixDebugAdapterDescriptorFactory">
+            <description><![CDATA[
+            Attaches to a Flix program started with <code>--Xdebug</code>
+            (<code>JAVA_TOOL_OPTIONS=-agentlib:jdwp=...</code>), translating JDI to DAP via the
+            bundled <code>FlixDebugAdapter.java</code> -- the identical adapter this project's VS
+            Code extension uses, started here with its "--port" socket transport instead of stdio
+            since LSP4IJ's DAP client only ever connects to a debug adapter over a socket.
+            <p><b>After creating a "Flix (--Xdebug attach)" run configuration, you must add a
+            <code>*.flix</code> mapping to it on the "Mappings" tab before breakpoints in .flix
+            files are recognized</b> -- LSP4IJ has no plugin.xml-level file mapping for DAP servers
+            (unlike its LSP `fileNamePatternMapping` above), only this per-run-configuration UI
+            step.</p>
+            ]]></description>
+        </debugAdapterServer>
+
+    </extensions>
+
+    <!-- Registers the "flix.runMain" LSP command the Flix language server attaches to the "Run"
+         CodeLens above def main(). LSP4IJ maps LSP commands to IntelliJ actions 1:1 by id (see
+         docs/DeveloperGuide.md#lsp-commands); without this the CodeLens fails with "Missing
+         'flix.runMain' command... needs to be contributed by an IntelliJ plugin". -->
+    <actions>
+        <action id="flix.runMain"
+                class="dev.wstein.flixplugin.FlixRunMainAction"
+                text="Flix: Run Main"
+                description="Runs `flix run` for the project (bound to the Flix language server's &quot;Run&quot; CodeLens above def main())"/>
+    </actions>
+</idea-plugin>
