@@ -9,6 +9,8 @@ import com.sun.jdi.request.EventRequestManager;
 import com.sun.jdi.request.StepRequest;
 
 import java.io.*;
+import java.net.ServerSocket;
+import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -26,20 +28,53 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class FlixDebugAdapter {
 
+    /**
+     * VS Code (and the standalone {@code dap_client_test.py}) launch this adapter as a child
+     * process and speak DAP directly over its stdin/stdout, so that stays the default with no
+     * arguments. IntelliJ's LSP4IJ, by contrast, has no stdio DAP transport at all -- its
+     * DebugAdapterDescriptor/ServerReadyConfig machinery only ever connects to a DAP server over
+     * a TCP socket (confirmed by reading LSP4IJ's own source, not just its docs) -- so "--port
+     * <n>" opens a one-shot server socket on that exact port instead and speaks DAP there once a
+     * single client connects. Both modes share every line of protocol/JDI handling below.
+     */
     public static void main(String[] args) throws Exception {
-        new FlixDebugAdapter().run();
+        Integer port = null;
+        for (int i = 0; i < args.length; i++) {
+            if ("--port".equals(args[i]) && i + 1 < args.length) {
+                port = Integer.parseInt(args[++i]);
+            }
+        }
+        if (port != null) {
+            runOverSocket(port);
+        } else {
+            new FlixDebugAdapter(System.in, System.out).run();
+        }
+    }
+
+    private static void runOverSocket(int port) throws Exception {
+        try (ServerSocket server = new ServerSocket(port)) {
+            // LSP4IJ's DebugAdapterDescriptor picks this exact port itself (via its "${port}"
+            // command-line substitution) before launching us, so it already knows where to
+            // connect; this line is only a human-visible/log-matchable readiness signal, not
+            // something the port number is parsed out of.
+            System.out.println("Listening for DAP client on port " + port);
+            System.out.flush();
+            Socket client = server.accept();
+            new FlixDebugAdapter(client.getInputStream(), client.getOutputStream()).run();
+        }
     }
 
     // ------------------------------------------------------------------
     // DAP transport
     // ------------------------------------------------------------------
 
-    private final InputStream in = System.in;
+    private final InputStream in;
     private final PrintStream out;
     private final AtomicInteger seq = new AtomicInteger(1);
 
-    FlixDebugAdapter() throws UnsupportedEncodingException {
-        this.out = new PrintStream(System.out, true, "UTF-8");
+    FlixDebugAdapter(InputStream in, OutputStream out) throws UnsupportedEncodingException {
+        this.in = in;
+        this.out = new PrintStream(out, true, "UTF-8");
     }
 
     private void run() throws IOException {
@@ -137,6 +172,14 @@ public class FlixDebugAdapter {
     private VirtualMachine vm;
     private Thread eventThread;
 
+    /** Namespaces with no user code in this project -- excluded both from class-prepare watching
+     * (onAttach) and from stepping (onStep), so e.g. java.lang.invoke.LambdaForm$DMH synthetic
+     * frames (generated for invokedynamic call sites, which Flix's compiled lambdas use heavily)
+     * are stepped over instead of surfacing as a source-less frame VS Code can't display. */
+    private static final String[] EXCLUDED_PACKAGES = {
+            "java.*", "javax.*", "jdk.*", "sun.*", "com.sun.*", "scala.*",
+            "dev.flix.runtime.*", "ca.uwaterloo.*", "com.*", "org.*", "net.*"};
+
     @SuppressWarnings("unchecked")
     private void handleRequest(Map<String, Object> req) {
         String command = (String) req.get("command");
@@ -144,13 +187,21 @@ public class FlixDebugAdapter {
         try {
             switch (command) {
                 case "initialize" -> onInitialize(req);
-                case "attach" -> onAttach(req, args);
+                // "launch" is handled identically to "attach": this adapter never launches a
+                // program itself, it only ever attaches to an already-running --Xdebug JVM's
+                // JDWP port given in `arguments`. A DAP client still gets to pick which of the
+                // two verbs it sends us for its own reasons -- e.g. LSP4IJ's DAPClient chooses
+                // launch vs. attach based solely on whether *it* had to spawn this adapter as a
+                // process (which it always does for us), not on what this adapter does upon
+                // receiving the request.
+                case "attach", "launch" -> onAttach(req, args);
                 case "setBreakpoints" -> onSetBreakpoints(req, args);
                 case "configurationDone" -> onConfigurationDone(req);
                 case "threads" -> onThreads(req);
                 case "stackTrace" -> onStackTrace(req, args);
                 case "scopes" -> onScopes(req, args);
                 case "variables" -> onVariables(req, args);
+                case "evaluate" -> onEvaluate(req, args);
                 case "continue" -> onContinue(req);
                 case "next" -> onStep(req, args, StepRequest.STEP_OVER);
                 case "stepIn" -> onStep(req, args, StepRequest.STEP_INTO);
@@ -199,9 +250,7 @@ public class FlixDebugAdapter {
         // compiler/runtime) makes startup extremely slow under SUSPEND_ALL.
         EventRequestManager erm = vm.eventRequestManager();
         ClassPrepareRequest cpr = erm.createClassPrepareRequest();
-        for (String pattern : new String[]{
-                "java.*", "javax.*", "jdk.*", "sun.*", "com.sun.*", "scala.*",
-                "dev.flix.runtime.*", "ca.uwaterloo.*", "com.*", "org.*", "net.*"}) {
+        for (String pattern : EXCLUDED_PACKAGES) {
             cpr.addClassExclusionFilter(pattern);
         }
         cpr.setSuspendPolicy(EventRequest.SUSPEND_EVENT_THREAD);
@@ -373,7 +422,11 @@ public class FlixDebugAdapter {
 
     /** synthetic frameId -> (threadId, frame index), since JDI StackFrame objects go stale across resumes. */
     private final Map<Integer, int[]> frameById = new LinkedHashMap<>();
-    private int nextFrameId = 1;
+    /** synthetic variablesReference -> the JDI ObjectReference/ArrayReference it should expand to. */
+    private final Map<Integer, ObjectReference> objectRefById = new LinkedHashMap<>();
+    /** frameById, objectRefById and StackFrame/ObjectReference identities all go stale once the VM resumes, so
+     * frame ids and object ids share one counter/generation and are cleared together. */
+    private int nextRefId = 1;
 
     private ThreadReference threadById(long id) {
         for (ThreadReference t : vm.allThreads()) {
@@ -391,7 +444,7 @@ public class FlixDebugAdapter {
             for (int i = 0; i < stack.size(); i++) {
                 StackFrame sf = stack.get(i);
                 Location loc = sf.location();
-                int frameId = nextFrameId++;
+                int frameId = nextRefId++;
                 frameById.put(frameId, new int[]{(int) threadId, i});
 
                 String stratum = loc.declaringType().availableStrata().contains("Flix") ? "Flix" : loc.declaringType().defaultStratum();
@@ -444,17 +497,18 @@ public class FlixDebugAdapter {
                 StackFrame sf = thread.frame(loc[1]);
                 try {
                     for (LocalVariable lv : sf.visibleVariables()) {
-                        Value v = sf.getValue(lv);
-                        Map<String, Object> var = new LinkedHashMap<>();
-                        var.put("name", lv.name());
-                        var.put("value", formatValue(v));
-                        var.put("type", lv.typeName());
-                        var.put("variablesReference", 0);
-                        vars.add(var);
+                        vars.add(toVariable(lv.name(), sf.getValue(lv), lv.typeName()));
                     }
                 } catch (AbsentInformationException e) {
                     // no local variable table for this frame; nothing to show.
                 }
+            }
+        } else {
+            ObjectReference or = objectRefById.get(variablesReference);
+            if (or instanceof ArrayReference ar) {
+                vars.addAll(arrayElementVariables(ar));
+            } else if (or != null) {
+                vars.addAll(fieldVariables(or));
             }
         }
         Map<String, Object> body = new LinkedHashMap<>();
@@ -462,13 +516,188 @@ public class FlixDebugAdapter {
         sendResponse(req, true, body);
     }
 
+    /** Supports a dotted-path expression against the given frame's locals, e.g. "classes" or
+     * "classes.v0" -- enough for watches/hover to drill into a value without needing a real
+     * expression language (no arithmetic, calls, or indexing). Requires a frameId; this adapter
+     * has no notion of a global/REPL scope to evaluate against. */
+    private void onEvaluate(Map<String, Object> req, Map<String, Object> args) throws IncompatibleThreadStateException {
+        Object frameIdObj = args.get("frameId");
+        if (frameIdObj == null) {
+            sendErrorResponse(req, "evaluate requires a frameId; no global scope is supported");
+            return;
+        }
+        int[] loc = frameById.get(((Number) frameIdObj).intValue());
+        if (loc == null) {
+            sendErrorResponse(req, "unknown frameId");
+            return;
+        }
+        ThreadReference thread = threadById(loc[0]);
+        if (thread == null || loc[1] >= thread.frameCount()) {
+            sendErrorResponse(req, "stack frame no longer available");
+            return;
+        }
+        StackFrame sf = thread.frame(loc[1]);
+        String expression = String.valueOf(args.get("expression")).trim();
+        String[] segments = expression.split("\\.");
+
+        Value current;
+        try {
+            LocalVariable lv = null;
+            for (LocalVariable candidate : sf.visibleVariables()) {
+                if (candidate.name().equals(segments[0])) {
+                    lv = candidate;
+                    break;
+                }
+            }
+            if (lv == null) {
+                sendErrorResponse(req, "no such variable: " + segments[0]);
+                return;
+            }
+            current = sf.getValue(lv);
+        } catch (AbsentInformationException e) {
+            sendErrorResponse(req, "no local variable information for this frame");
+            return;
+        }
+
+        for (int i = 1; i < segments.length; i++) {
+            if (!(current instanceof ObjectReference or)) {
+                sendErrorResponse(req, "cannot access field '" + segments[i] + "' on a non-object value");
+                return;
+            }
+            Field f = or.referenceType().fieldByName(segments[i]);
+            if (f == null) {
+                sendErrorResponse(req, "no such field: " + segments[i]);
+                return;
+            }
+            current = or.getValue(f);
+        }
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("result", formatValue(current));
+        body.put("type", current == null ? "null" : current.type().name());
+        body.put("variablesReference", registerRef(current));
+        sendResponse(req, true, body);
+    }
+
+    /** Every field (including inherited) of an arbitrary object, resolved generically via JDI reflection
+     * so that Flix's compiled representations (Tag/Obj wrappers, records, ...) drill down without any
+     * Flix-specific knowledge here. */
+    private List<Object> fieldVariables(ObjectReference or) {
+        List<Object> vars = new ArrayList<>();
+        for (Field f : or.referenceType().allFields()) {
+            if (f.isStatic()) continue;
+            Value v;
+            try {
+                v = or.getValue(f);
+            } catch (Exception e) {
+                continue;
+            }
+            vars.add(toVariable(f.name(), v, f.typeName()));
+        }
+        return vars;
+    }
+
+    private List<Object> arrayElementVariables(ArrayReference ar) {
+        List<Object> vars = new ArrayList<>();
+        List<Value> values = ar.getValues();
+        for (int i = 0; i < values.size(); i++) {
+            vars.add(toVariable("[" + i + "]", values.get(i), ""));
+        }
+        return vars;
+    }
+
+    private Map<String, Object> toVariable(String name, Value v, String typeName) {
+        Map<String, Object> var = new LinkedHashMap<>();
+        var.put("name", name);
+        var.put("value", formatValue(v));
+        var.put("type", typeName);
+        var.put("variablesReference", registerRef(v));
+        return var;
+    }
+
+    /** Registers an ObjectReference/ArrayReference so a later "variables" request against the returned
+     * id can expand it; returns 0 (DAP's "no children") for primitives, strings and null. */
+    private int registerRef(Value v) {
+        if (!(v instanceof ObjectReference or) || v instanceof StringReference) return 0;
+        int id = nextRefId++;
+        objectRefById.put(id, or);
+        return id;
+    }
+
     private static String formatValue(Value v) {
         if (v == null) return "null";
         if (v instanceof StringReference sr) return "\"" + sr.value() + "\"";
+        if (v instanceof ArrayReference ar) {
+            return ar.referenceType().name() + "[" + ar.length() + "]";
+        }
         if (v instanceof ObjectReference or) {
-            return or.referenceType().name() + "@" + or.uniqueID();
+            ReferenceType rt = or.referenceType();
+            if (hasRecordShape(rt)) {
+                return formatRecord(or);
+            }
+            // Flix's tagged-union cases (Tag$Obj$Obj and friends) always carry an "ordinal" field
+            // discriminating which case of the enum this is. Surfacing it is a safe, honest hint --
+            // unlike guessing the case's *name* or treating e.g. a 2-arg case as a list, which would
+            // require compiler metadata this adapter doesn't have and could show something actively
+            // wrong for a user-defined enum that happens to share List's v0/v1 shape.
+            Field ordinalField = rt.fieldByName("ordinal");
+            if (ordinalField != null) {
+                try {
+                    return rt.name() + "@" + or.uniqueID() + " (ordinal=" + or.getValue(ordinalField) + ")";
+                } catch (Exception e) {
+                    // fall through to the plain form below
+                }
+            }
+            return rt.name() + "@" + or.uniqueID();
         }
         return v.toString();
+    }
+
+    private static boolean hasRecordShape(ReferenceType rt) {
+        return rt.fieldByName("label") != null && rt.fieldByName("value") != null && rt.fieldByName("rest") != null;
+    }
+
+    /** Flix compiles structural records as a chain of "label"/"value"/"rest" cells terminating in
+     * some non-matching sentinel object; walking that chain into a normal {label = value, ...}
+     * summary is a safe, generic structural transformation (not a guess about a specific record
+     * type's meaning) since every Flix record uses this exact three-field encoding regardless of
+     * its fields' names or types. */
+    private static String formatRecord(ObjectReference or) {
+        StringBuilder sb = new StringBuilder("{");
+        boolean first = true;
+        ObjectReference cur = or;
+        int depth = 0;
+        while (cur != null && depth++ < 64) {
+            ReferenceType rt = cur.referenceType();
+            Field labelField = rt.fieldByName("label");
+            Field valueField = rt.fieldByName("value");
+            Field restField = rt.fieldByName("rest");
+            if (labelField == null || valueField == null || restField == null) break;
+            Value labelValue;
+            try {
+                labelValue = cur.getValue(labelField);
+            } catch (Exception e) {
+                break;
+            }
+            if (!(labelValue instanceof StringReference labelStr)) break;
+            if (!first) sb.append(", ");
+            first = false;
+            sb.append(labelStr.value()).append(" = ");
+            try {
+                sb.append(formatValue(cur.getValue(valueField)));
+            } catch (Exception e) {
+                sb.append("?");
+            }
+            Value restValue;
+            try {
+                restValue = cur.getValue(restField);
+            } catch (Exception e) {
+                break;
+            }
+            cur = restValue instanceof ObjectReference nextOr ? nextOr : null;
+        }
+        sb.append("}");
+        return sb.toString();
     }
 
     // ------------------------------------------------------------------
@@ -477,6 +706,7 @@ public class FlixDebugAdapter {
 
     private void onContinue(Map<String, Object> req) {
         frameById.clear();
+        objectRefById.clear();
         vm.resume();
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("allThreadsContinued", true);
@@ -489,10 +719,14 @@ public class FlixDebugAdapter {
         if (thread == null) { sendResponse(req, true, null); return; }
         EventRequestManager erm = vm.eventRequestManager();
         StepRequest step = erm.createStepRequest(thread, StepRequest.STEP_LINE, depth);
+        for (String pattern : EXCLUDED_PACKAGES) {
+            step.addClassExclusionFilter(pattern);
+        }
         step.addCountFilter(1);
         step.setSuspendPolicy(EventRequest.SUSPEND_ALL);
         step.enable();
         frameById.clear();
+        objectRefById.clear();
         sendResponse(req, true, null);
         vm.resume();
     }

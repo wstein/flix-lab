@@ -34,16 +34,23 @@ that stratum. This adapter is a thin, purpose-built bridge instead:
 
 ## Install (unpublished, local extension)
 
+Recent VS Code versions only load extensions that have a matching entry in
+`~/.vscode/extensions/extensions.json` -- the old trick of symlinking a bare
+folder into `extensions/` is silently ignored (no error, it just doesn't
+show up under `@installed`). [install.sh](install.sh) packages this
+directory as a `.vsix` with `vsce` and installs it properly:
+
 ```console
-ln -s "$(pwd)/debug-adapter" ~/.vscode/extensions/flix-debug
+./debug-adapter/install.sh
 ```
 
-Then reload VS Code (Developer: Reload Window). No build step -- the
-adapter is launched via `java`'s single-file source-code execution
-(`java --add-modules jdk.jdi src/FlixDebugAdapter.java`, wired up in
-[bin/flix-debug-adapter](bin/flix-debug-adapter)), so editing
-`FlixDebugAdapter.java` takes effect on the next debug session with no
-recompile step.
+Then reload VS Code (Developer: Reload Window). There's still no compile
+step for the adapter itself -- it's launched via `java`'s single-file
+source-code execution (`java --add-modules jdk.jdi src/FlixDebugAdapter.java`,
+wired up in [bin/flix-debug-adapter](bin/flix-debug-adapter)) -- but because
+`install.sh` copies this directory into the extensions folder rather than
+symlinking it, editing `FlixDebugAdapter.java` (or `package.json`) requires
+re-running `install.sh` and reloading the window to take effect.
 
 ## Use
 
@@ -86,9 +93,11 @@ send. Start a suspended example first (see the parent README), then:
   has no stratum info, so breakpoints there would fall back to whatever the
   JVM's ordinary `LineNumberTable` reports (usually wrong line numbers for
   a source-mapped language).
-- `variables` formats object values the way `jdb` does
-  (`TypeName@uniqueId`), not recursively -- no expand/drill-down into
-  nested fields.
+- `variables` labels objects the way `jdb` does (`TypeName@uniqueId`), but
+  they expand on click: every field is listed generically via JDI
+  reflection, so Flix's compiled representations (`Tag$Obj$Obj`,
+  `RecordExtend$Obj`, cons-cell lists, ...) can be walked field-by-field
+  without any Flix-specific unwrapping here.
 - No conditional breakpoints, logpoints, watch expressions, or exception
   breakpoints.
 - `next`/`stepIn`/`stepOut` don't filter out JDK-internal frames, so
