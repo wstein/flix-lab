@@ -77,13 +77,19 @@ ones. Two request modes are supported:
   }
   ```
 
-  `flixCommand` defaults to `["flix"]`; it's pointed at
-  `scripts/flix-fork` here because a plain `flix` on `PATH` wouldn't have
-  `--Xdebug` support. `program`'s directory (or the nearest `flix.toml`
-  above it) becomes the working directory `flix run` executes in, unless
-  `cwd` is given explicitly. The spawned process's output is streamed back
-  as Debug Console output, and stopping the session also kills it (unlike
-  `attach`, which never owns the target process's lifecycle).
+  `flixCommand` defaults to the `FLIX_DEBUG_COMMAND` environment variable
+  if set, then `["flix"]`; it's pointed at `scripts/flix-fork` here because
+  a plain `flix` on `PATH` wouldn't have `--Xdebug` support. The env var
+  fallback exists for DAP clients with no way to set a per-request
+  argument at all -- e.g. IntelliJ via LSP4IJ, whose generic run
+  configuration UI has no field for this; export
+  `FLIX_DEBUG_COMMAND=/path/to/scripts/flix-fork` before launching the IDE
+  so its child processes inherit it. `program`'s directory (or the nearest
+  `flix.toml` above it) becomes the working directory `flix run` executes
+  in, unless `cwd` is given explicitly. The spawned process's output is
+  streamed back as Debug Console output, and stopping the session also
+  kills it (unlike `attach`, which never owns the target process's
+  lifecycle).
 
 - **`attach`**: connects to a JVM you've already started yourself,
   suspended, with a JDWP agent listening (e.g. via a shell script or a
