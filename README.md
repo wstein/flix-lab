@@ -94,46 +94,16 @@ flix build
 flix test
 ```
 
-## Debugging an example (VS Code)
+## Debugging an example
 
 The three examples (`main`, `demo`, `rewriteDemo`) can be stepped through
-**with real breakpoints set directly in the `.flix` editor gutter**, using
-`--Xdebug` from a custom build of
-[wstein/flix-fork](https://github.com/wstein/flix-fork) -- upstream Flix has
-no such flag. `--Xdebug` makes the compiler emit full debug info (line
-numbers, a `LocalVariableTable`, and a JSR-45 `SourceDebugExtension`/SMAP
-declaring a `"Flix"` stratum), and [debug-adapter/](debug-adapter/) is a
-small custom Debug Adapter Protocol server
-([FlixDebugAdapter.java](debug-adapter/src/FlixDebugAdapter.java)) that
-resolves those `.flix` breakpoints via `com.sun.jdi` against that stratum --
-VS Code's stock Java debugger only understands `.java` source, so it can't
-use it directly.
-
-Setup:
-
-1. Build `wstein/flix-fork` and drop the resulting jar (e.g.
-   `flix-vendor-2026.07.24.1.jar`) in this project's root. It's gitignored
-   (covered by the `*.jar` rule) since it's a personal build artifact, not a
-   project dependency.
-   [scripts/flix-fork](scripts/flix-fork) always runs the most recently
-   modified `flix-vendor-*.jar` there (or `$FLIX_FORK_JAR`, if set), so
-   rebuilding the fork doesn't require updating any config.
-2. Install the debug adapter extension once:
-   `ln -s "$(pwd)/debug-adapter" ~/.vscode/extensions/flix-debug`, then
-   reload VS Code. See [debug-adapter/README.md](debug-adapter/README.md)
-   for how it works and its limitations.
-3. Set a breakpoint directly in a `.flix` file's gutter (e.g.
-   [src/DatalogYamlDemo.flix](src/DatalogYamlDemo.flix)'s `printSubtree`).
-4. Open the Run and Debug panel and pick one of **Flix: attach main** /
-   **Flix: attach demo** / **Flix: attach rewriteDemo**. Each one runs its
-   matching background task ([.vscode/tasks.json](.vscode/tasks.json)) --
-   which builds and runs that entrypoint with `--Xdebug` under a suspended
-   JDWP agent on port 5005 -- then attaches
-   ([.vscode/launch.json](.vscode/launch.json)) once the agent is listening
-   and resumes once your breakpoints are set.
-
-Verified end-to-end -- not just the JDWP handshake, but an actual `.flix`
-line breakpoint hitting with correct locals -- with a scripted DAP client
-([debug-adapter/test/dap_client_test.py](debug-adapter/test/dap_client_test.py))
-that drives the adapter the same way VS Code does, before wiring up the
-editor UI.
+**with real breakpoints set directly in the `.flix` editor gutter**, in
+either VS Code or an IntelliJ-based IDE, using `--Xdebug` from a custom
+build of [wstein/flix-fork](https://github.com/wstein/flix-fork) --
+upstream Flix has no such flag. See
+[docs/debugging.md](docs/debugging.md) for the full setup (both editors,
+attach and launch modes), what to expect once stopped (variables, stepping,
+evaluate expressions), how to read Flix's compiled representation in the
+debugger, and troubleshooting. [debug-adapter/](debug-adapter/) has the
+adapter's own implementation details
+([FlixDebugAdapter.java](debug-adapter/src/FlixDebugAdapter.java)).
