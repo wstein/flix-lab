@@ -71,7 +71,7 @@ ones. Two request modes are supported:
       "type": "flix",
       "name": "Flix: launch demo",
       "request": "launch",
-      "program": "${workspaceFolder}/src/DatalogYamlDemo.flix",
+      "program": "${workspaceFolder}/src/flix/DatalogYamlDemo.flix",
       "entryPoint": "demo",
       "flixCommand": ["${workspaceFolder}/scripts/flix-fork"]
   }
@@ -119,7 +119,7 @@ variables, continue, disconnect) via the same DAP messages VS Code would
 send. Start a suspended example first (see the parent README), then:
 
 ```console
-./debug-adapter/test/dap_client_test.py "$(pwd)/src/DatalogYamlDemo.flix" 209
+./debug-adapter/test/dap_client_test.py "$(pwd)/src/flix/DatalogYamlDemo.flix" 209
 ```
 
 ## Known limitations

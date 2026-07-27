@@ -1,6 +1,6 @@
 #!/bin/bash
 # Downloads the org.openrewrite:*:0.1.0-SNAPSHOT fork jars used by
-# src/JavaRewriteDemo.flix into vendor/rewrite/. These are not committed to
+# src/flix/JavaRewriteDemo.flix into vendor/rewrite/. These are not committed to
 # git (see vendor/README.md) and not published to Maven Central, so this
 # script must be run once after cloning before `flix check`/`flix run
 # --entrypoint rewriteDemo` will work.

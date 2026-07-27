@@ -58,7 +58,7 @@ ships):
     "type": "flix",
     "name": "Flix: launch demo",
     "request": "launch",
-    "program": "${workspaceFolder}/src/DatalogYamlDemo.flix",
+    "program": "${workspaceFolder}/src/flix/DatalogYamlDemo.flix",
     "entryPoint": "demo",
     "flixCommand": ["${workspaceFolder}/scripts/flix-fork"]
 }

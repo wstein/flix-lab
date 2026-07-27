@@ -1,6 +1,6 @@
 # vendor/rewrite
 
-`src/JavaRewriteDemo.flix` depends on `org.openrewrite:*:0.1.0-SNAPSHOT`,
+`src/flix/JavaRewriteDemo.flix` depends on `org.openrewrite:*:0.1.0-SNAPSHOT`,
 built from a private fork and not published to Maven Central, so it can't be
 resolved via Flix's `[mvn-dependencies]`. `flix.toml`'s `[jar-dependencies]`
 instead points at 7 jars expected in `rewrite/` via absolute `file://` URLs,

@@ -20,12 +20,45 @@ flix run -- --usage       # same as -h
 Passing an unrecognized option prints an error and the usage message, and
 exits with status code 2.
 
-Also ported natively to [Java 21, Kotlin, and Scala 3](ports/) -- same
-observable behavior, no shared code, single dependency-free file each.
+## Native ports (Java 21, Kotlin, Scala 3)
+
+[src/java/Main.java](src/java/Main.java), [src/kotlin/Main.kt](src/kotlin/Main.kt),
+and [src/scala/Main.scala](src/scala/Main.scala) reimplement the same CLI
+natively in each JVM language instead of calling
+[src/flix/Main.flix](src/flix/Main.flix)'s `Util.GetOpt`-based parsing --
+same observable behavior, no shared code, single dependency-free file each.
+
+Plain compiler, no build step:
+
+```console
+javac --release 21 -d out src/java/Main.java && java -cp out Main Ada
+
+kotlinc src/kotlin/Main.kt -include-runtime -d out/main.jar && java -jar out/main.jar Ada
+
+mkdir -p out && scalac -d out src/scala/Main.scala
+SCALA_HOME="$(brew --prefix scala)/libexec/maven2/org/scala-lang"  # adjust if not installed via Homebrew
+java -cp "out:$(find "$SCALA_HOME" -iname 'scala3-library_3-*.jar' -o -iname 'scala-library-*.jar' | paste -sd: -)" run Ada
+```
+
+Unlike `javac`/`kotlinc`, `scalac -d out` requires `out` to already exist.
+`java -cp out run` alone isn't enough either -- `@main`'s generated entry
+point pulls in `scala.util.CommandLineParser` from the Scala runtime
+library, which isn't on the classpath unless added explicitly (`scalac`
+itself doesn't need it; only running the compiled class does).
+
+Or via the root Gradle build ([build.gradle.kts](build.gradle.kts)), which
+already targets Java 21/Kotlin 2.4.10/Scala 3.8.4 for the whole project and
+points its source sets directly at `src/java`, `src/kotlin`, `src/scala`:
+
+```console
+./gradlew runJavaPort -PappArgs=Ada
+./gradlew runKotlinPort -PappArgs=Ada
+./gradlew runScalaPort -PappArgs=Ada
+```
 
 ## Datalog + Java interop demo
 
-[src/DatalogYamlDemo.flix](src/DatalogYamlDemo.flix) is a second, independent
+[src/flix/DatalogYamlDemo.flix](src/flix/DatalogYamlDemo.flix) is a second, independent
 entry point (`demo`) that demonstrates:
 
 * Reading a text file with plain Java IO (`java.nio.file.Files`), no
@@ -56,7 +89,7 @@ flix run --entrypoint demo
 
 ## Java LST + Datalog demo
 
-[src/JavaRewriteDemo.flix](src/JavaRewriteDemo.flix) is a third entry point
+[src/flix/JavaRewriteDemo.flix](src/flix/JavaRewriteDemo.flix) is a third entry point
 (`rewriteDemo`) that demonstrates deriving Datalog facts from a real Java
 source module, parsed with a fork of
 [OpenRewrite](https://docs.openrewrite.org/)'s Java LST (Lossless Semantic

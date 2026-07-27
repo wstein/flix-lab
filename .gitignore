@@ -72,3 +72,10 @@ replay_pid*
 .gradle/
 .intellijPlatform/
 .kotlin/
+
+### IntelliJ IDEA ###
+.idea/
+*.iml
+
+### Python ###
+__pycache__/

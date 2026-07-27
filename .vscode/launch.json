@@ -29,7 +29,7 @@
             "type": "flix",
             "name": "Flix: launch rewriteDemo",
             "request": "launch",
-            "program": "${workspaceFolder}/src/JavaRewriteDemo.flix",
+            "program": "${workspaceFolder}/src/flix/JavaRewriteDemo.flix",
             "entryPoint": "rewriteDemo",
             "flixCommand": [
                 "${workspaceFolder}/scripts/flix-fork"
