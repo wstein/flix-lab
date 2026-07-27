@@ -2,7 +2,6 @@ plugins {
     java
     scala
     kotlin("jvm") version "2.4.10"
-    application
 }
 
 group = "dev.wstein.flix"
@@ -29,14 +28,25 @@ scala {
     zincVersion.set("1.9.1")
 }
 
-// The native CLI ports (see README.md's "Native ports" section) live directly under
-// src/{java,kotlin,scala} instead of the default src/main/{java,kotlin,scala} convention -- the
-// plain javac/kotlinc/scalac instructions in README.md reference them at these same paths.
+// The native CLI ports (see README.md's "Native ports" section) get their own source set rather
+// than joining `main` -- sharing main's classpath (the flix-vendor/artifact jars, Jackson, ASM,
+// ANTLR, ...) broke compilation outright: a root-package `Array` class somewhere in that huge,
+// unrelated dependency graph shadowed `kotlin.Array` in src/kotlin/Main.kt. Isolating them also
+// matches each port's design as a "single dependency-free file" -- see README.md and the plain
+// javac/kotlinc/scalac instructions there, which reference these same src/{java,kotlin,scala}
+// paths.
 sourceSets {
-    main {
+    create("ports") {
         java.srcDir("src/java")
         kotlin.srcDir("src/kotlin")
         scala.srcDir("src/scala")
+    }
+    // PortsCliTest lives here rather than the default `test` source set, which compiles against
+    // `main`'s classpath -- the same toxic mix of unrelated dependencies that had to be kept out
+    // of `ports` above. It only needs JUnit: it drives each port as a subprocess (see its own doc
+    // comment), never touching the port classes at Java compile time.
+    create("portsTest") {
+        java.srcDir("src/portsTest/java")
     }
 }
 
@@ -77,6 +87,13 @@ dependencies {
 
     // Testing
     testImplementation("junit:junit:4.13.2")
+
+    // ports/ isolated classpath: the Scala port needs scala3-library at runtime for
+    // scala.util.CommandLineParser (see README.md's "Native ports" section); the Kotlin Gradle
+    // plugin adds kotlin-stdlib to every Kotlin source set automatically.
+    "portsImplementation"("org.scala-lang:scala3-library_3:$scalaVersion")
+
+    "portsTestImplementation"("junit:junit:4.13.2")
 }
 
 tasks {
@@ -94,19 +111,43 @@ tasks {
     compileJava {
         options.release.set(21)
     }
-}
 
-application {
-    mainClass.set("Main")
+    named<ScalaCompile>("compilePortsScala") {
+        scalaCompileOptions.additionalParameters = listOf(
+            "-target:21",
+            "-release:21"
+        )
+    }
+
+    named<JavaCompile>("compilePortsJava") {
+        options.release.set(21)
+    }
 }
 
 // One run task per native CLI port (src/java, src/kotlin, src/scala -- see README.md's "Native
 // ports" section), since each compiles to a differently-named entry-point class (Java's
 // `public class Main` -> Main, Kotlin's top-level `fun main` -> MainKt, Scala's `@main def run`
-// -> run) that plain `application.mainClass`/`./gradlew run` can only target one of at a time.
+// -> run) that a single mainClass could only target one of at a time.
 // Pass a CLI argument with e.g. `./gradlew runKotlinPort -PappArgs=Ada`.
-val portRuntimeClasspath = sourceSets.main.get().runtimeClasspath
+val portRuntimeClasspath = sourceSets.named("ports").get().runtimeClasspath
 val portArgs = (findProperty("appArgs") as String?)?.split(" ") ?: emptyList()
+
+// PortsCliTest (src/portsTest/java) spawns each port as a subprocess against this classpath (see
+// its own doc comment for why it can't just call each Main directly). Wired into `check` so
+// `./gradlew check`/`build` covers the ports the same way `test` covers `main`.
+val portsTestSourceSet = sourceSets.named("portsTest").get()
+tasks.register<Test>("testPorts") {
+    group = "verification"
+    description = "Smoke-tests the native CLI ports (src/java, src/kotlin, src/scala)."
+    dependsOn("compilePortsJava", "compilePortsKotlin", "compilePortsScala")
+    testClassesDirs = portsTestSourceSet.output.classesDirs
+    classpath = portsTestSourceSet.runtimeClasspath
+    systemProperty("portsClasspath", portRuntimeClasspath.asPath)
+}
+
+tasks.named("check") {
+    dependsOn("testPorts")
+}
 
 tasks.register<JavaExec>("runJavaPort") {
     group = "application"

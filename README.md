@@ -47,13 +47,20 @@ library, which isn't on the classpath unless added explicitly (`scalac`
 itself doesn't need it; only running the compiled class does).
 
 Or via the root Gradle build ([build.gradle.kts](build.gradle.kts)), which
-already targets Java 21/Kotlin 2.4.10/Scala 3.8.4 for the whole project and
-points its source sets directly at `src/java`, `src/kotlin`, `src/scala`:
+targets Java 21/Kotlin 2.4.10/Scala 3.8.4 and compiles the three ports in
+their own `ports` source set -- isolated from the rest of the project's
+dependencies (Jackson/ASM/the Flix build artifact/...), since those turned
+out to collide with unqualified JVM types like `Array`/`String` when
+compiled on the same classpath. `PortsCliTest`
+([src/portsTest/java](src/portsTest/java)) smoke-tests each port's help
+text, greeting, and error-exit-code behavior as a subprocess, wired into
+`./gradlew check`:
 
 ```console
 ./gradlew runJavaPort -PappArgs=Ada
 ./gradlew runKotlinPort -PappArgs=Ada
 ./gradlew runScalaPort -PappArgs=Ada
+./gradlew testPorts
 ```
 
 ## Datalog + Java interop demo

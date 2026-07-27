@@ -77,5 +77,9 @@ replay_pid*
 .idea/
 *.iml
 
+### Gradle (local machine overrides) ###
+# org.gradle.java.home and similar machine-specific settings don't belong in version control.
+gradle.properties
+
 ### Python ###
 __pycache__/
