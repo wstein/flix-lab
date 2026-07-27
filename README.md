@@ -20,6 +20,9 @@ flix run -- --usage       # same as -h
 Passing an unrecognized option prints an error and the usage message, and
 exits with status code 2.
 
+Also ported natively to [Java 21, Kotlin, and Scala 3](ports/) -- same
+observable behavior, no shared code, single dependency-free file each.
+
 ## Datalog + Java interop demo
 
 [src/DatalogYamlDemo.flix](src/DatalogYamlDemo.flix) is a second, independent
