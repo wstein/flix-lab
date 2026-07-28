@@ -41,6 +41,16 @@ sourceSets {
         kotlin.srcDir("src/kotlin")
         scala.srcDir("src/scala")
     }
+    // Plain Java that Flix *calls*, as opposed to the ports above which reimplement Main.flix
+    // standalone. It is packaged as a jar and put on the compiler's classpath through flix.toml's
+    // [jar-dependencies], because the Flix compiler does not compile .java sources itself.
+    //
+    // Isolated for the same reason `ports` is: it must not inherit main's dependency graph. It also
+    // must not depend on anything, since whatever it needs would have to be added to flix.toml by
+    // hand -- a plain, dependency-free module is the whole point.
+    create("javalib") {
+        java.srcDir("src/javalib")
+    }
     // PortsCliTest lives here rather than the default `test` source set, which compiles against
     // `main`'s classpath -- the same toxic mix of unrelated dependencies that had to be kept out
     // of `ports` above. It only needs JUnit: it drives each port as a subprocess (see its own doc
@@ -48,6 +58,23 @@ sourceSets {
     create("portsTest") {
         java.srcDir("src/portsTest/java")
     }
+}
+
+// Full debug information for the Flix-callable Java. Line numbers alone would let breakpoints bind
+// while leaving the Variables pane showing arg0/arg1 placeholders instead of parameter names, which
+// reads as a debugger fault rather than a missing compiler flag.
+tasks.named<JavaCompile>("compileJavalibJava") {
+    options.compilerArgs.addAll(listOf("-g"))
+}
+
+// The jar flix.toml points at. Written into vendor/ alongside the other vendored jars so there is
+// one place to look for "what is on the Flix classpath and where did it come from".
+val javalibJar by tasks.registering(Jar::class) {
+    group = "build"
+    description = "Packages src/javalib for the Flix compiler's classpath (see flix.toml)."
+    archiveFileName.set("flixlab-javalib.jar")
+    destinationDirectory.set(layout.projectDirectory.dir("vendor/javalib"))
+    from(sourceSets.named("javalib").get().output)
 }
 
 dependencies {

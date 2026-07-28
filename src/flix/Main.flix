@@ -1,3 +1,5 @@
+import dev.wstein.flixlab.{Greeter => Greeter}
+
 use Sys.Env
 use Sys.Exit
 use Util.GetOpt
@@ -38,8 +40,16 @@ def greet(nonOptions: List[String]): String =
         case Nil       => "Hello World!"
     }
 
+///
+/// Calls plain Java, so a debug session has a Flix -> Java -> Flix path to step through.
+/// See src/javalib/dev/wstein/flixlab/Greeter.java.
+///
+def helloFromJava(): String \ IO =
+    Greeter.greeting()
+
 /// The main entry point.
 def main(): Unit \ { IO, Env, Exit } =
+    println(helloFromJava());
     let args = Env.getArgs();
     match GetOpt.getOpt(ArgOrder.Permute, options(), args) {
         case Validation.Success(r) =>

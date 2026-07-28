@@ -29,9 +29,14 @@ authors     = ["John Doe <john@example.com>"]
 "com.github.ben-manes.caffeine:caffeine" = "2.9.3"
 "org.objenesis:objenesis" = "3.5"
 
+# Plain Java called from Main.flix, giving a debug session somewhere to step into. The Flix
+# compiler does not compile .java sources, so src/javalib is packaged by Gradle's `javalibJar`
+# task and put on the classpath here. Rebuild with `./gradlew javalibJar` after editing it.
+#
 # org.openrewrite:*:0.1.0-SNAPSHOT, a private fork not published to Maven
 # Central. Vendored under vendor/rewrite/ -- see vendor/README.md.
 [jar-dependencies]
+"flixlab-javalib.jar" = "url:file:///Users/werner/github.com/wstein/flix-lab/vendor/javalib/flixlab-javalib.jar"
 "rewrite-core-0.1.0-SNAPSHOT.jar" = "url:file:///Users/werner/github.com/wstein/flix-lab/vendor/rewrite/rewrite-core-0.1.0-SNAPSHOT.jar"
 "rewrite-java-0.1.0-SNAPSHOT.jar" = "url:file:///Users/werner/github.com/wstein/flix-lab/vendor/rewrite/rewrite-java-0.1.0-SNAPSHOT.jar"
 "rewrite-java-21-0.1.0-SNAPSHOT.jar" = "url:file:///Users/werner/github.com/wstein/flix-lab/vendor/rewrite/rewrite-java-21-0.1.0-SNAPSHOT.jar"
