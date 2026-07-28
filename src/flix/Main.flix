@@ -47,9 +47,27 @@ def greet(nonOptions: List[String]): String =
 def helloFromJava(): String \ IO =
     Greeter.greeting()
 
+///
+/// Calls nothing outside this file, so the classes compiled from it draw on a single source and
+/// `Smap.build()` emits no `SourceDebugExtension`. That is the shape row 9 of the native-debugger
+/// gate needs: a breakpoint here resolves through the *default* stratum rather than through `Flix`.
+///
+/// Every other declaration in this file reaches the standard library, so inlining pulls in a second
+/// source and SMAP always appears -- which is why this had to be written rather than found. Keep it
+/// free of library calls; adding one silently converts it into another row-8 fixture.
+///
+/// Verify with:
+///     javap -v -p 'build/class/Def$noSmapFixture.class' | grep -c SourceDebugExtension   # 0
+///
+def noSmapFixture(n: Int32): Int32 =
+    let doubled = n * 2;
+    let shifted = doubled + 1;
+    shifted
+
 /// The main entry point.
 def main(): Unit \ { IO, Env, Exit } =
     println(helloFromJava());
+    println(noSmapFixture(20));
     let args = Env.getArgs();
     match GetOpt.getOpt(ArgOrder.Permute, options(), args) {
         case Validation.Success(r) =>
