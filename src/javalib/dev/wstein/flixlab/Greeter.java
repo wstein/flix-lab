@@ -24,8 +24,24 @@ public final class Greeter {
         return message;
     }
 
-    /** The subject of the greeting. Separate so it can be stepped into from {@link #greeting()}. */
+    /**
+     * The subject of the greeting. Separate so it can be stepped into from {@link #greeting()}.
+     *
+     * <p>Reaches for a configured value first and falls back. The failure is deliberate: a caught
+     * exception is what an exception breakpoint needs a target for, and one thrown on a normal run
+     * proves the request is honoured in a Flix-launched JVM without needing a failing program. The
+     * greeting is unchanged either way, so nothing downstream depends on which branch ran.
+     */
     private static String subject() {
-        return "Java";
+        try {
+            return configuredSubject();
+        } catch (IllegalStateException unconfigured) {
+            return "Java";
+        }
+    }
+
+    /** Always fails: nothing configures a subject. See {@link #subject()}. */
+    private static String configuredSubject() {
+        throw new IllegalStateException("no subject configured");
     }
 }
