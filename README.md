@@ -63,6 +63,49 @@ text, greeting, and error-exit-code behavior as a subprocess, wired into
 ./gradlew testPorts
 ```
 
+## Polyglot Greeter siblings (Java, Kotlin, Scala, Groovy, JRuby)
+
+Unlike the native ports above (standalone CLI reimplementations that never
+call into Flix), [src/javalib/dev/wstein/flixlab/Greeter.java](src/javalib/dev/wstein/flixlab/Greeter.java)
+and its four siblings --
+[src/kotlinlib](src/kotlinlib/dev/wstein/flixlab/kotlin/Greeter.kt),
+[src/scalalib](src/scalalib/dev/wstein/flixlab/scala/Greeter.scala),
+[src/groovylib](src/groovylib/dev/wstein/flixlab/groovy/Greeter.groovy), and
+[src/jrubylib](src/jrubylib/java/dev/wstein/flixlab/jruby/Greeter.java) --
+are all called *from* [src/flix/Main.flix](src/flix/Main.flix), one call per
+language, so a debug session has a Flix -> (language) -> Flix path to step
+through in each. Every one of the five follows the same shape: a public
+`greeting()` that assigns from a nested private `subject()` call, giving a
+debugger something to Step Into, Step Over, and Step Out of (see the Java
+Greeter's doc comment for why that shape, specifically). JRuby is the odd one
+out: Ruby doesn't compile to a static method Flix can call directly, so its
+`Greeter.java` only boots an embedded JRuby runtime via
+`org.jruby.embed.ScriptingContainer`; the actual `subject`/`greeting` methods
+live in [greeter.rb](src/jrubylib/resources/dev/wstein/flixlab/jruby/greeter.rb),
+interpreted at call time.
+
+Each sibling compiles in its own Gradle source set (`kotlinlib`, `scalalib`,
+`groovylib`, `jrubylib` -- see build.gradle.kts) into its own jar under
+`vendor/`, referenced by `flix.toml`'s `[jar-dependencies]`; each language's
+runtime library reaches Flix's classpath separately via
+`[mvn-dependencies]`, the same two-step wiring `javalib`'s jar already used.
+Rebuild all five jars after editing any of them:
+
+```console
+./gradlew libJars
+```
+
+```console
+flix run
+# Hello Java!
+# Hello Kotlin!
+# Hello Scala!
+# Hello Groovy!
+# Hello JRuby!
+# 41
+# Hello World!
+```
+
 ## Datalog + Java interop demo
 
 [src/flix/DatalogYamlDemo.flix](src/flix/DatalogYamlDemo.flix) is a second, independent

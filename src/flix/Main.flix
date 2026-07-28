@@ -1,4 +1,8 @@
 import dev.wstein.flixlab.{Greeter => Greeter}
+import dev.wstein.flixlab.kotlin.{Greeter => KotlinGreeter}
+import dev.wstein.flixlab.scala.{Greeter => ScalaGreeter}
+import dev.wstein.flixlab.groovy.{Greeter => GroovyGreeter}
+import dev.wstein.flixlab.jruby.{Greeter => JRubyGreeter}
 
 use Sys.Env
 use Sys.Exit
@@ -48,6 +52,34 @@ def helloFromJava(): String \ IO =
     Greeter.greeting()
 
 ///
+/// Same as `helloFromJava`, but into the Kotlin sibling.
+/// See src/kotlinlib/dev/wstein/flixlab/kotlin/Greeter.kt.
+///
+def helloFromKotlin(): String \ IO =
+    KotlinGreeter.greeting()
+
+///
+/// Same as `helloFromJava`, but into the Scala sibling.
+/// See src/scalalib/dev/wstein/flixlab/scala/Greeter.scala.
+///
+def helloFromScala(): String \ IO =
+    ScalaGreeter.greeting()
+
+///
+/// Same as `helloFromJava`, but into the Groovy sibling.
+/// See src/groovylib/dev/wstein/flixlab/groovy/Greeter.groovy.
+///
+def helloFromGroovy(): String \ IO =
+    GroovyGreeter.greeting()
+
+///
+/// Same as `helloFromJava`, but into the JRuby sibling, which boots an embedded JRuby runtime.
+/// See src/jrubylib/java/dev/wstein/flixlab/jruby/Greeter.java.
+///
+def helloFromJRuby(): String \ IO =
+    JRubyGreeter.greeting()
+
+///
 /// Calls nothing outside this file, so the classes compiled from it draw on a single source and
 /// `Smap.build()` emits no `SourceDebugExtension`. That is the shape row 9 of the native-debugger
 /// gate needs: a breakpoint here resolves through the *default* stratum rather than through `Flix`.
@@ -67,6 +99,10 @@ def noSmapFixture(n: Int32): Int32 =
 /// The main entry point.
 def main(): Unit \ { IO, Env, Exit } =
     println(helloFromJava());
+    println(helloFromKotlin());
+    println(helloFromScala());
+    println(helloFromGroovy());
+    println(helloFromJRuby());
     println(noSmapFixture(20));
     let args = Env.getArgs();
     match GetOpt.getOpt(ArgOrder.Permute, options(), args) {

@@ -29,14 +29,31 @@ authors     = ["John Doe <john@example.com>"]
 "com.github.ben-manes.caffeine:caffeine" = "2.9.3"
 "org.objenesis:objenesis" = "3.5"
 
+# Runtime libraries for the non-Java Greeter siblings below (see [jar-dependencies]): each
+# sibling's jar only holds its own compiled classes, so its language runtime has to be on Flix's
+# classpath separately, the same way javalib's transitive deps above are.
+"org.jetbrains.kotlin:kotlin-stdlib" = "2.4.10"
+"org.scala-lang:scala3-library_3" = "3.8.4"
+"org.apache.groovy:groovy" = "5.0.4"
+"org.jruby:jruby-complete" = "10.0.4.0"
+
 # Plain Java called from Main.flix, giving a debug session somewhere to step into. The Flix
 # compiler does not compile .java sources, so src/javalib is packaged by Gradle's `javalibJar`
 # task and put on the classpath here. Rebuild with `./gradlew javalibJar` after editing it.
+#
+# The four jars below are Kotlin/Scala/Groovy/JRuby siblings of javalib's Greeter, one language per
+# jar -- see src/kotlinlib, src/scalalib, src/groovylib, src/jrubylib and each language's own
+# `*libJar` Gradle task. Rebuild all of them with `./gradlew kotlinlibJar scalalibJar groovylibJar
+# jrubylibJar` after editing any of them.
 #
 # org.openrewrite:*:0.1.0-SNAPSHOT, a private fork not published to Maven
 # Central. Vendored under vendor/rewrite/ -- see vendor/README.md.
 [jar-dependencies]
 "flixlab-javalib.jar" = "url:file:///Users/werner/github.com/wstein/flix-lab/vendor/javalib/flixlab-javalib.jar"
+"flixlab-kotlinlib.jar" = "url:file:///Users/werner/github.com/wstein/flix-lab/vendor/kotlinlib/flixlab-kotlinlib.jar"
+"flixlab-scalalib.jar" = "url:file:///Users/werner/github.com/wstein/flix-lab/vendor/scalalib/flixlab-scalalib.jar"
+"flixlab-groovylib.jar" = "url:file:///Users/werner/github.com/wstein/flix-lab/vendor/groovylib/flixlab-groovylib.jar"
+"flixlab-jrubylib.jar" = "url:file:///Users/werner/github.com/wstein/flix-lab/vendor/jrubylib/flixlab-jrubylib.jar"
 "rewrite-core-0.1.0-SNAPSHOT.jar" = "url:file:///Users/werner/github.com/wstein/flix-lab/vendor/rewrite/rewrite-core-0.1.0-SNAPSHOT.jar"
 "rewrite-java-0.1.0-SNAPSHOT.jar" = "url:file:///Users/werner/github.com/wstein/flix-lab/vendor/rewrite/rewrite-java-0.1.0-SNAPSHOT.jar"
 "rewrite-java-21-0.1.0-SNAPSHOT.jar" = "url:file:///Users/werner/github.com/wstein/flix-lab/vendor/rewrite/rewrite-java-21-0.1.0-SNAPSHOT.jar"

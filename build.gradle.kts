@@ -1,5 +1,6 @@
 plugins {
     java
+    groovy
     scala
     kotlin("jvm") version "2.4.10"
 }
@@ -51,6 +52,26 @@ sourceSets {
     create("javalib") {
         java.srcDir("src/javalib")
     }
+    // Kotlin/Scala/Groovy/JRuby siblings of javalib's Greeter (see flix.toml's [jar-dependencies]
+    // comment and each language's Greeter doc comment). One source set per language, each packaged
+    // into its own jar by a `*libJar` task below -- kept out of javalib so javalib itself stays
+    // dependency-free, and kept separate from `ports` since these are libraries Flix calls into,
+    // not standalone CLI reimplementations.
+    create("kotlinlib") {
+        kotlin.srcDir("src/kotlinlib")
+    }
+    create("scalalib") {
+        scala.srcDir("src/scalalib")
+    }
+    create("groovylib") {
+        groovy.srcDir("src/groovylib")
+    }
+    // greeter.rb lives under src/jrubylib/resources (the default resources dir for this source
+    // set's name) so it lands on the classpath next to Greeter.class, at the same relative path
+    // Greeter.java loads it from via PathType.CLASSPATH.
+    create("jrubylib") {
+        java.srcDir("src/jrubylib/java")
+    }
     // PortsCliTest lives here rather than the default `test` source set, which compiles against
     // `main`'s classpath -- the same toxic mix of unrelated dependencies that had to be kept out
     // of `ports` above. It only needs JUnit: it drives each port as a subprocess (see its own doc
@@ -75,6 +96,45 @@ val javalibJar by tasks.registering(Jar::class) {
     archiveFileName.set("flixlab-javalib.jar")
     destinationDirectory.set(layout.projectDirectory.dir("vendor/javalib"))
     from(sourceSets.named("javalib").get().output)
+}
+
+val kotlinlibJar by tasks.registering(Jar::class) {
+    group = "build"
+    description = "Packages src/kotlinlib for the Flix compiler's classpath (see flix.toml)."
+    archiveFileName.set("flixlab-kotlinlib.jar")
+    destinationDirectory.set(layout.projectDirectory.dir("vendor/kotlinlib"))
+    from(sourceSets.named("kotlinlib").get().output)
+}
+
+val scalalibJar by tasks.registering(Jar::class) {
+    group = "build"
+    description = "Packages src/scalalib for the Flix compiler's classpath (see flix.toml)."
+    archiveFileName.set("flixlab-scalalib.jar")
+    destinationDirectory.set(layout.projectDirectory.dir("vendor/scalalib"))
+    from(sourceSets.named("scalalib").get().output)
+}
+
+val groovylibJar by tasks.registering(Jar::class) {
+    group = "build"
+    description = "Packages src/groovylib for the Flix compiler's classpath (see flix.toml)."
+    archiveFileName.set("flixlab-groovylib.jar")
+    destinationDirectory.set(layout.projectDirectory.dir("vendor/groovylib"))
+    from(sourceSets.named("groovylib").get().output)
+}
+
+val jrubylibJar by tasks.registering(Jar::class) {
+    group = "build"
+    description = "Packages src/jrubylib for the Flix compiler's classpath (see flix.toml)."
+    archiveFileName.set("flixlab-jrubylib.jar")
+    destinationDirectory.set(layout.projectDirectory.dir("vendor/jrubylib"))
+    from(sourceSets.named("jrubylib").get().output)
+}
+
+// One place to (re)build everything flix.toml's [jar-dependencies] points at.
+tasks.register("libJars") {
+    group = "build"
+    description = "Packages javalib and its Kotlin/Scala/Groovy/JRuby siblings for Flix's classpath."
+    dependsOn(javalibJar, kotlinlibJar, scalalibJar, groovylibJar, jrubylibJar)
 }
 
 dependencies {
@@ -121,6 +181,22 @@ dependencies {
     "portsImplementation"("org.scala-lang:scala3-library_3:$scalaVersion")
 
     "portsTestImplementation"("junit:junit:4.13.2")
+
+    // kotlinlib/ isolated classpath: the Kotlin Gradle plugin adds kotlin-stdlib automatically, as
+    // with `ports` above -- nothing to add here.
+
+    // scalalib/ isolated classpath: same reason as `portsImplementation` above.
+    "scalalibImplementation"("org.scala-lang:scala3-library_3:$scalaVersion")
+
+    // groovylib/ isolated classpath: unlike the Kotlin plugin, Gradle's `groovy` plugin does not
+    // add a Groovy dependency automatically -- without this, compileGroovylibGroovy fails outright.
+    "groovylibImplementation"("org.apache.groovy:groovy:5.0.4")
+
+    // jrubylib/ isolated classpath: Greeter.java's ScriptingContainer comes from here (see
+    // src/jrubylib/java/dev/wstein/flixlab/jruby/Greeter.java). Not bundled into the jar the Jar
+    // task below produces -- like kotlinlib/scalalib/groovylib's runtimes, it reaches Flix's
+    // classpath separately via flix.toml's [mvn-dependencies].
+    "jrubylibImplementation"("org.jruby:jruby-complete:10.0.4.0")
 }
 
 tasks {
@@ -148,6 +224,22 @@ tasks {
 
     named<JavaCompile>("compilePortsJava") {
         options.release.set(21)
+    }
+
+    named<ScalaCompile>("compileScalalibScala") {
+        scalaCompileOptions.additionalParameters = listOf(
+            "-target:21",
+            "-release:21"
+        )
+    }
+
+    named<JavaCompile>("compileJrubylibJava") {
+        options.release.set(21)
+    }
+
+    named<GroovyCompile>("compileGroovylibGroovy") {
+        sourceCompatibility = "21"
+        targetCompatibility = "21"
     }
 }
 
