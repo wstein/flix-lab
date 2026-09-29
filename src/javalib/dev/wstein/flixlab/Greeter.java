@@ -1,5 +1,7 @@
 package dev.wstein.flixlab;
 
+import dev.flix.gen.JavaGreeting;
+
 /**
  * Plain Java called from Flix, so a debug session has somewhere to step into.
  *
@@ -30,13 +32,13 @@ public final class Greeter {
      * <p>Reaches for a configured value first and falls back. The failure is deliberate: a caught
      * exception is what an exception breakpoint needs a target for, and one thrown on a normal run
      * proves the request is honoured in a Flix-launched JVM without needing a failing program. The
-     * greeting is unchanged either way, so nothing downstream depends on which branch ran.
+     * fallback calls an exported Flix facade, completing the Flix -> Java -> Flix path.
      */
     private static String subject() {
         try {
             return configuredSubject();
         } catch (IllegalStateException unconfigured) {
-            return "Java";
+            return JavaGreeting.subject("Java");
         }
     }
 

@@ -46,9 +46,8 @@ sourceSets {
     // standalone. It is packaged as a jar and put on the compiler's classpath through flix.toml's
     // [jar-dependencies], because the Flix compiler does not compile .java sources itself.
     //
-    // Isolated for the same reason `ports` is: it must not inherit main's dependency graph. It also
-    // must not depend on anything, since whatever it needs would have to be added to flix.toml by
-    // hand -- a plain, dependency-free module is the whole point.
+    // Isolated for the same reason `ports` is: it must not inherit main's dependency graph.
+    // The exported Flix facade is supplied as a compile-only stub below.
     create("javalib") {
         java.srcDir("src/javalib")
     }
@@ -81,10 +80,36 @@ sourceSets {
     }
 }
 
+// Break the Flix/Java cycle: derive facade sources without resolving Java imports, compile those
+// sources separately, then compile the Java greeter against their class files. Only javalib's own
+// output goes into its jar; a generated stub must never be present at runtime.
+val flixStubSources = layout.buildDirectory.dir("flix-stubs")
+val flixStubClasses = layout.buildDirectory.dir("flix-stub-classes")
+val generateFlixStubs by tasks.registering(Exec::class) {
+    group = "build"
+    description = "Generates compile-only Java facades for exported Flix definitions."
+    inputs.files(fileTree("src") { include("**/*.flix") })
+    inputs.file("scripts/flix-fork")
+    inputs.files(fileTree(rootDir) { include("flix-vendor-*.jar") })
+    System.getenv("FLIX_FORK_JAR")?.let { inputs.file(it) }
+    outputs.dir(flixStubSources)
+    commandLine("scripts/flix-fork", "stubs", "--out", flixStubSources.get().asFile.absolutePath)
+}
+
+val compileFlixStubsJava by tasks.registering(JavaCompile::class) {
+    dependsOn(generateFlixStubs)
+    source(fileTree(flixStubSources) { include("**/*.java") })
+    classpath = files()
+    destinationDirectory.set(flixStubClasses)
+    options.release.set(21)
+}
+
 // Full debug information for the Flix-callable Java. Line numbers alone would let breakpoints bind
 // while leaving the Variables pane showing arg0/arg1 placeholders instead of parameter names, which
 // reads as a debugger fault rather than a missing compiler flag.
 tasks.named<JavaCompile>("compileJavalibJava") {
+    dependsOn(compileFlixStubsJava)
+    classpath += files(flixStubClasses)
     options.compilerArgs.addAll(listOf("-g"))
 }
 
@@ -96,6 +121,15 @@ val javalibJar by tasks.registering(Jar::class) {
     archiveFileName.set("flixlab-javalib.jar")
     destinationDirectory.set(layout.projectDirectory.dir("vendor/javalib"))
     from(sourceSets.named("javalib").get().output)
+    // The Flix package manager neither refreshes cached local file URLs nor downloads a missing
+    // file URL. Keep its project-local copy current when this jar changes, so run/test use the real
+    // Java class compiled above.
+    doLast {
+        copy {
+            from(archiveFile)
+            into(layout.projectDirectory.dir("lib/external"))
+        }
+    }
 }
 
 val kotlinlibJar by tasks.registering(Jar::class) {

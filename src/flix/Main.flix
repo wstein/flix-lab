@@ -11,6 +11,12 @@ use Util.GetOpt.ArgDescr
 use Util.GetOpt.ArgOrder
 use Util.GetOpt.OptionDescr
 
+/// The Java greeter calls this facade after Flix calls into Java.
+mod JavaGreeting {
+    @Export
+    pub def subject(origin: String): String = "${origin} via Flix"
+}
+
 ///
 /// The command line flags recognized by this program.
 ///
@@ -45,7 +51,7 @@ def greet(nonOptions: List[String]): String =
     }
 
 ///
-/// Calls plain Java, so a debug session has a Flix -> Java -> Flix path to step through.
+/// Calls Java, which calls the exported `JavaGreeting.subject` facade back into Flix.
 /// See src/javalib/dev/wstein/flixlab/Greeter.java.
 ///
 def helloFromJava(): String \ IO =
