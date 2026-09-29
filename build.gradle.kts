@@ -83,6 +83,11 @@ sourceSets {
     create("portsTest") {
         java.srcDir("src/portsTest/java")
     }
+    // Spock checks the packaged JVM program as a subprocess. Its Groovy/JUnit dependencies stay
+    // outside main and the native ports.
+    create("spockTest") {
+        groovy.srcDir("src/spockTest/groovy")
+    }
 }
 
 // Break the Flix/Java cycle: derive facade sources without resolving Java imports, compile those
@@ -253,6 +258,9 @@ dependencies {
     "jrubylibImplementation"("org.jruby:jruby-complete:10.0.4.0")
 
     "clojurelibImplementation"("org.clojure:clojure:1.12.6")
+
+    "spockTestImplementation"("org.spockframework:spock-core:2.4-groovy-5.0")
+    "spockTestImplementation"("org.apache.groovy:groovy:5.0.4")
 }
 
 tasks {
@@ -324,8 +332,34 @@ tasks.register<Test>("testPorts") {
     systemProperty("portsClasspath", portRuntimeClasspath.asPath)
 }
 
+val buildFlixJar by tasks.registering(Exec::class) {
+    group = "build"
+    description = "Builds the packaged Flix program after all greeter jars are ready."
+    dependsOn("libJars")
+    inputs.files(fileTree("src") { include("**/*.flix") })
+    inputs.files(fileTree("test") { include("**/*.flix") })
+    inputs.files(fileTree("vendor") { include("**/*.jar") })
+    inputs.file("flix.toml")
+    inputs.file("scripts/flix-fork")
+    inputs.files(fileTree(rootDir) { include("flix-vendor-*.jar") })
+    System.getenv("FLIX_FORK_JAR")?.let { inputs.file(it) }
+    outputs.file(layout.projectDirectory.file("artifact/flix-lab.jar"))
+    commandLine("scripts/flix-fork", "build-jar", "--yes")
+}
+
+val spockTestSourceSet = sourceSets.named("spockTest").get()
+tasks.register<Test>("testSpock") {
+    group = "verification"
+    description = "Tests the packaged mixed-language program with Spock."
+    dependsOn(buildFlixJar)
+    testClassesDirs = spockTestSourceSet.output.classesDirs
+    classpath = spockTestSourceSet.runtimeClasspath
+    useJUnitPlatform()
+    systemProperty("flixLabRoot", projectDir.absolutePath)
+}
+
 tasks.named("check") {
-    dependsOn("testPorts")
+    dependsOn("testPorts", "testSpock")
 }
 
 tasks.register<JavaExec>("runJavaPort") {
