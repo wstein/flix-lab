@@ -263,8 +263,10 @@ public class FlixDebugAdapter {
         cargs.get("port").setValue(String.valueOf(port));
         vm = connector.attach(cargs);
 
-        // Flix's own generated classes (Def$foo, Clo$bar, ...) are unqualified (no package), so
-        // excluding these known-irrelevant namespaces leaves essentially only user code visible.
+        // Root and one-segment Flix namespaces generate implementation classes in dev.flix.gen;
+        // deeper namespaces generate them beside their facades (for example Acme.Api$Def$foo).
+        // The exclusions below leave generated user code visible while filtering JVM and compiler
+        // classes that would make class-prepare watching slow under SUSPEND_ALL.
         // Without this, watching every class the whole JVM loads (including Flix's own Scala
         // compiler/runtime) makes startup extremely slow under SUSPEND_ALL.
         EventRequestManager erm = vm.eventRequestManager();

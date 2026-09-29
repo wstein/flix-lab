@@ -5,13 +5,24 @@ line.
 
 ## Usage
 
+Build and verify the Java round trip, then run the packaged program with its
+dependencies on one JVM classpath. Set `FLIX_FORK_JAR` to a current fork
+assembly if no `flix-vendor-*.jar` is in the project root (see
+`scripts/flix-fork`).
+
 ```console
-flix run                # Hello World!
-flix run -- Ada          # Hello, Ada!
-flix run -- -h            # prints usage and exits
-flix run -- --help        # same as -h
-flix run -- --usage       # same as -h
+./scripts/check-java-round-trip
+runtime_cp="artifact/flix-lab.jar:$(find lib -type f -name '*.jar' -print | paste -sd: -)"
+java -cp "$runtime_cp" Main             # Hello World! (after the greeter lines)
+java -cp "$runtime_cp" Main Ada         # Hello, Ada!
+java -cp "$runtime_cp" Main -h          # prints usage and exits
+java -cp "$runtime_cp" Main --help      # same as -h
+java -cp "$runtime_cp" Main --usage     # same as -h
 ```
+
+The fork's current in-process `flix run` loader cannot resolve an exported Flix
+facade from an external Java jar. The packaged JVM run above loads both on one
+classpath.
 
 | Flag                      | Description                      |
 | ------------------------- | -------------------------------- |
@@ -73,9 +84,10 @@ and its four siblings --
 [src/groovylib](src/groovylib/dev/wstein/flixlab/groovy/Greeter.groovy), and
 [src/jrubylib](src/jrubylib/java/dev/wstein/flixlab/jruby/Greeter.java) --
 are all called *from* [src/flix/Main.flix](src/flix/Main.flix), one call per
-language, so a debug session has a Flix -> (language) -> Flix path to step
-through in each. Every one of the five follows the same shape: a public
-`greeting()` that assigns from a nested private `subject()` call, giving a
+language. The Java greeter calls the exported `JavaGreeting.subject` facade
+back in Flix, giving a Flix -> Java -> Flix path. The other four currently
+return directly to their Flix callers. Every one of the five follows the same
+shape: a public `greeting()` that assigns from a nested private `subject()` call, giving a
 debugger something to Step Into, Step Over, and Step Out of (see the Java
 Greeter's doc comment for why that shape, specifically). JRuby is the odd one
 out: Ruby doesn't compile to a static method Flix can call directly, so its
@@ -95,9 +107,18 @@ Rebuild all five jars after editing any of them:
 ./gradlew libJars
 ```
 
+For the Java greeter, `javalibJar` first generates Flix facade stubs under
+`build/flix-stubs`, compiles those into a separate compile-only directory, and
+compiles Java against them. The jar contains only Java classes; the final Flix
+build emits the real facade. The runtime check builds both stages, runs the
+packaged program, and checks its Java greeting:
+
 ```console
-flix run
-# Hello Java!
+./scripts/check-java-round-trip
+# Java round trip passed: Hello Java via Flix!
+
+java -cp "$runtime_cp" Main
+# Hello Java via Flix!
 # Hello Kotlin!
 # Hello Scala!
 # Hello Groovy!

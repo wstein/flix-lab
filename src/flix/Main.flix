@@ -95,7 +95,7 @@ def helloFromJRuby(): String \ IO =
 /// free of library calls; adding one silently converts it into another row-8 fixture.
 ///
 /// Verify with:
-///     javap -v -p 'build/class/Def$noSmapFixture.class' | grep -c SourceDebugExtension   # 0
+///     javap -v -p 'build/class/dev/flix/gen/Def$noSmapFixture.class' | grep -c SourceDebugExtension   # 0
 ///
 def noSmapFixture(n: Int32): Int32 =
     let doubled = n * 2;

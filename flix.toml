@@ -39,7 +39,9 @@ authors     = ["John Doe <john@example.com>"]
 
 # Plain Java called from Main.flix, giving a debug session somewhere to step into. The Flix
 # compiler does not compile .java sources, so src/javalib is packaged by Gradle's `javalibJar`
-# task and put on the classpath here. Rebuild with `./gradlew javalibJar` after editing it.
+# task and put on the classpath here. That task generates compile-only @Export stubs first, then
+# compiles Java against them and refreshes the project-local Flix cache. Rebuild with
+# `./gradlew javalibJar` after editing the Java greeter or its exported Flix callback.
 #
 # The four jars below are Kotlin/Scala/Groovy/JRuby siblings of javalib's Greeter, one language per
 # jar -- see src/kotlinlib, src/scalalib, src/groovylib, src/jrubylib and each language's own
