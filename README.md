@@ -7,12 +7,27 @@
 A small Flix command-line program that greets a name passed on the command
 line.
 
+## Compiler wrapper
+
+[`./flixw`](flixw) is the checked-in Flix wrapper. Its
+[lock file](.flixw/lock.toml) pins upstream Flix 0.77.0. This project's
+`@Export` facade and stub build use the local Flix fork, so select that
+compiler for the commands below:
+
+```console
+export FLIX_FORK_JAR=/absolute/path/to/flix-fork/out/flix/assembly.dest/out.jar
+export FLIX_JAR="$FLIX_FORK_JAR"
+./flixw check --yes
+```
+
+`FLIX_JAR` selects the fork for `./flixw`; `FLIX_FORK_JAR` selects it for
+Gradle's stub task and `scripts/check-java-round-trip`. These overrides do not
+change the committed upstream pin. Without `FLIX_JAR`, `./flixw` uses that pin.
+
 ## Usage
 
 Build and verify the Java round trip, then run the packaged program with its
-dependencies on one JVM classpath. Set `FLIX_FORK_JAR` to a current fork
-assembly if no `flix-vendor-*.jar` is in the project root (see
-`scripts/flix-fork`).
+dependencies on one JVM classpath.
 
 ```console
 ./scripts/check-java-round-trip
@@ -24,7 +39,7 @@ java -cp "$runtime_cp" Main --help      # same as -h
 java -cp "$runtime_cp" Main --usage     # same as -h
 ```
 
-The fork's current in-process `flix run` loader cannot resolve an exported Flix
+The fork's current in-process `./flixw run` loader cannot resolve an exported Flix
 facade from an external Java jar. The packaged JVM run above loads both on one
 classpath.
 
@@ -163,7 +178,7 @@ descendant, using plain Flix recursion over the parsed facts (not Datalog).
 Run it with:
 
 ```console
-flix run --entrypoint demo
+./flixw run --entrypoint demo
 ```
 
 ## Java LST + Datalog demo
@@ -199,14 +214,15 @@ The vendored jars aren't committed to git; fetch them once first:
 
 ```console
 ./vendor/setup-rewrite.sh
-flix run --entrypoint rewriteDemo
+./flixw run --entrypoint rewriteDemo
 ```
 
 ## Building
 
 ```console
-flix build
-flix test
+./flixw build --yes
+./flixw test --yes
+./gradlew check
 ```
 
 ## Debugging an example
