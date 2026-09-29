@@ -88,3 +88,4 @@ gradle.properties
 ### Python ###
 __pycache__/
 /flix.jar
+/flix.toml

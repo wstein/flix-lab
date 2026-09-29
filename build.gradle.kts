@@ -95,9 +95,18 @@ sourceSets {
 // output goes into its jar; a generated stub must never be present at runtime.
 val flixStubSources = layout.buildDirectory.dir("flix-stubs")
 val flixStubClasses = layout.buildDirectory.dir("flix-stub-classes")
+val prepareFlixManifest by tasks.registering(Exec::class) {
+    group = "build"
+    description = "Generates flix.toml with absolute local jar URLs for this checkout."
+    inputs.file("flix.toml.in")
+    inputs.file("scripts/setup-flix-manifest.py")
+    outputs.file("flix.toml")
+    commandLine("python3", "scripts/setup-flix-manifest.py")
+}
 val generateFlixStubs by tasks.registering(Exec::class) {
     group = "build"
     description = "Generates compile-only Java facades for exported Flix definitions."
+    dependsOn(prepareFlixManifest)
     inputs.files(fileTree("src") { include("**/*.flix") })
     inputs.file("scripts/flix-fork")
     inputs.files(fileTree(rootDir) { include("flix-vendor-*.jar") })
@@ -131,15 +140,6 @@ val javalibJar by tasks.registering(Jar::class) {
     archiveFileName.set("flixlab-javalib.jar")
     destinationDirectory.set(layout.projectDirectory.dir("vendor/javalib"))
     from(sourceSets.named("javalib").get().output)
-    // The Flix package manager neither refreshes cached local file URLs nor downloads a missing
-    // file URL. Keep its project-local copy current when this jar changes, so run/test use the real
-    // Java class compiled above.
-    doLast {
-        copy {
-            from(archiveFile)
-            into(layout.projectDirectory.dir("lib/external"))
-        }
-    }
 }
 
 val kotlinlibJar by tasks.registering(Jar::class) {
@@ -180,11 +180,35 @@ val clojurelibJar by tasks.registering(Jar::class) {
     archiveFileName.set("flixlab-clojurelib.jar")
     destinationDirectory.set(layout.projectDirectory.dir("vendor/clojurelib"))
     from(sourceSets.named("clojurelib").get().output)
-    // Flix caches local file URLs without refreshing them, and cannot download a missing file URL.
-    doLast {
-        copy {
-            from(archiveFile)
-            into(layout.projectDirectory.dir("lib/external"))
+}
+
+// Flix reuses existing lib/external files and cannot fetch missing file URLs. Give each copy its
+// own tracked output so a changed source jar or a deleted cache entry triggers a refresh.
+val greeterJars = listOf(javalibJar, kotlinlibJar, scalalibJar, groovylibJar, jrubylibJar, clojurelibJar)
+val cachedGreeterJars = greeterJars.map { jarTask ->
+    tasks.register("cache${jarTask.name.replaceFirstChar(Char::uppercase)}") {
+        dependsOn(jarTask)
+        val sourceJar = jarTask.flatMap { it.archiveFile }
+        val cachedJar = layout.projectDirectory.file("lib/external/${jarTask.get().archiveFileName.get()}")
+        inputs.file(sourceJar)
+        outputs.file(cachedJar)
+        doLast {
+            cachedJar.asFile.parentFile.mkdirs()
+            sourceJar.get().asFile.copyTo(cachedJar.asFile, overwrite = true)
+        }
+    }
+}
+val rewriteJarNames = listOf("core", "java", "java-21", "java-lombok", "properties", "xml", "yaml")
+val cachedRewriteJars = rewriteJarNames.map { module ->
+    tasks.register("cacheRewrite${module.replace('-', '_').replaceFirstChar(Char::uppercase)}Jar") {
+        val name = "rewrite-$module-0.1.0-SNAPSHOT.jar"
+        val sourceJar = layout.projectDirectory.file("vendor/rewrite/$name")
+        val cachedJar = layout.projectDirectory.file("lib/external/$name")
+        inputs.file(sourceJar)
+        outputs.file(cachedJar)
+        doLast {
+            cachedJar.asFile.parentFile.mkdirs()
+            sourceJar.asFile.copyTo(cachedJar.asFile, overwrite = true)
         }
     }
 }
@@ -193,7 +217,7 @@ val clojurelibJar by tasks.registering(Jar::class) {
 tasks.register("libJars") {
     group = "build"
     description = "Packages the JVM greeters for Flix's classpath."
-    dependsOn(javalibJar, kotlinlibJar, scalalibJar, groovylibJar, jrubylibJar, clojurelibJar)
+    dependsOn(cachedGreeterJars + cachedRewriteJars)
 }
 
 dependencies {
@@ -335,7 +359,7 @@ tasks.register<Test>("testPorts") {
 val buildFlixJar by tasks.registering(Exec::class) {
     group = "build"
     description = "Builds the packaged Flix program after all greeter jars are ready."
-    dependsOn("libJars")
+    dependsOn("libJars", prepareFlixManifest)
     inputs.files(fileTree("src") { include("**/*.flix") })
     inputs.files(fileTree("test") { include("**/*.flix") })
     inputs.files(fileTree("vendor") { include("**/*.jar") })
@@ -352,6 +376,9 @@ tasks.register<Test>("testSpock") {
     group = "verification"
     description = "Tests the packaged mixed-language program with Spock."
     dependsOn(buildFlixJar)
+    inputs.file(buildFlixJar.map { layout.projectDirectory.file("artifact/flix-lab.jar") })
+    inputs.files(fileTree("lib") { include("**/*.jar") })
+    inputs.file(javalibJar.flatMap { it.archiveFile })
     testClassesDirs = spockTestSourceSet.output.classesDirs
     classpath = spockTestSourceSet.runtimeClasspath
     useJUnitPlatform()

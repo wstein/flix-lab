@@ -17,12 +17,21 @@ compiler for the commands below:
 ```console
 export FLIX_FORK_JAR=/absolute/path/to/flix-fork/out/flix/assembly.dest/out.jar
 export FLIX_JAR="$FLIX_FORK_JAR"
+./vendor/setup-rewrite.sh
+./gradlew libJars
 ./flixw check --yes
 ```
 
 `FLIX_JAR` selects the fork for `./flixw`; `FLIX_FORK_JAR` selects it for
 Gradle's stub task and `scripts/check-java-round-trip`. These overrides do not
 change the committed upstream pin. Without `FLIX_JAR`, `./flixw` uses that pin.
+The separate [packages.lock](packages.lock) records Flix package dependency
+digests; it currently has no entries because this project declares no Flix
+package dependencies.
+Gradle generates checkout-local `flix.toml` from [flix.toml.in](flix.toml.in),
+including absolute URLs for the local jars. `./gradlew libJars` also populates
+Flix's local jar cache, which the compiler needs before a direct `./flixw`
+command.
 
 ## Usage
 
@@ -115,7 +124,7 @@ and [greeter.clj](src/clojurelib/resources/dev/wstein/flixlab/clojure/greeter.cl
 Each sibling compiles in its own Gradle source set (`kotlinlib`, `scalalib`,
 `groovylib`, `jrubylib`, `clojurelib` -- see build.gradle.kts) into its own jar
 under
-`vendor/`, referenced by `flix.toml`'s `[jar-dependencies]`; each language's
+`vendor/`, referenced by the generated `flix.toml`'s `[jar-dependencies]`; each language's
 runtime library reaches Flix's classpath separately via
 `[mvn-dependencies]`, the same two-step wiring `javalib`'s jar already used.
 Rebuild all five jars after editing any of them:
