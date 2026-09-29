@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Builds the staged Java/Flix cycle, then runs both sides on one JVM classpath.
+set -euo pipefail
+
+project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$project_root"
+
+./gradlew javalibJar --console=plain
+./scripts/flix-fork build-jar --yes
+
+runtime_cp="$project_root/artifact/flix-lab.jar"
+while IFS= read -r -d '' jar_path; do
+    runtime_cp="$runtime_cp:$jar_path"
+done < <(find "$project_root/lib" -type f -name '*.jar' -print0)
+
+output="$(java -cp "$runtime_cp" Main)"
+first_line="${output%%$'\n'*}"
+if [[ "$first_line" != "Hello Java via Flix!" ]]; then
+    printf 'Unexpected Java round-trip greeting: %s\n' "$first_line" >&2
+    exit 1
+fi
+printf 'Java round trip passed: %s\n' "$first_line"
