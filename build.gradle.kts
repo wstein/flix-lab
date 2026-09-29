@@ -51,8 +51,8 @@ sourceSets {
     create("javalib") {
         java.srcDir("src/javalib")
     }
-    // Kotlin/Scala/Groovy/JRuby siblings of javalib's Greeter (see flix.toml's [jar-dependencies]
-    // comment and each language's Greeter doc comment). One source set per language, each packaged
+    // Kotlin/Scala/Groovy/JRuby/Clojure siblings of javalib's Greeter (see flix.toml and each
+    // language's Greeter doc comment). One source set per language, each packaged
     // into its own jar by a `*libJar` task below -- kept out of javalib so javalib itself stays
     // dependency-free, and kept separate from `ports` since these are libraries Flix calls into,
     // not standalone CLI reimplementations.

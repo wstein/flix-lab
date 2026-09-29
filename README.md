@@ -78,30 +78,28 @@ text, greeting, and error-exit-code behavior as a subprocess, wired into
 ./gradlew testPorts
 ```
 
-## Polyglot Greeter siblings (Java, Kotlin, Scala, Groovy, JRuby)
+## Polyglot Greeter siblings (Java, Kotlin, Scala, Groovy, JRuby, Clojure)
 
 Unlike the native ports above (standalone CLI reimplementations that never
 call into Flix), [src/javalib/dev/wstein/flixlab/Greeter.java](src/javalib/dev/wstein/flixlab/Greeter.java)
-and its four siblings --
+and its five siblings --
 [src/kotlinlib](src/kotlinlib/dev/wstein/flixlab/kotlin/Greeter.kt),
 [src/scalalib](src/scalalib/dev/wstein/flixlab/scala/Greeter.scala),
-[src/groovylib](src/groovylib/dev/wstein/flixlab/groovy/Greeter.groovy), and
-[src/jrubylib](src/jrubylib/java/dev/wstein/flixlab/jruby/Greeter.java) --
+[src/groovylib](src/groovylib/dev/wstein/flixlab/groovy/Greeter.groovy),
+[src/jrubylib](src/jrubylib/java/dev/wstein/flixlab/jruby/Greeter.java), and
+[src/clojurelib](src/clojurelib/java/dev/wstein/flixlab/clojure/Greeter.java) --
 are all called *from* [src/flix/Main.flix](src/flix/Main.flix), one call per
 language. The Java greeter calls the exported `JavaGreeting.subject` facade
-back in Flix, giving a Flix -> Java -> Flix path. The other four currently
-return directly to their Flix callers. Every one of the five follows the same
-shape: a public `greeting()` that assigns from a nested private `subject()` call, giving a
-debugger something to Step Into, Step Over, and Step Out of (see the Java
-Greeter's doc comment for why that shape, specifically). JRuby is the odd one
-out: Ruby doesn't compile to a static method Flix can call directly, so its
-`Greeter.java` only boots an embedded JRuby runtime via
-`org.jruby.embed.ScriptingContainer`; the actual `subject`/`greeting` methods
-live in [greeter.rb](src/jrubylib/resources/dev/wstein/flixlab/jruby/greeter.rb),
-interpreted at call time.
+back in Flix, giving a Flix -> Java -> Flix path. The other five currently
+return directly to their Flix callers. Each greeter has a `greeting()` that
+calls a separate `subject()` function for debugger stepping (see the Java
+greeter's doc comment). JRuby and Clojure use Java entry points to load their
+language sources from the jar: [greeter.rb](src/jrubylib/resources/dev/wstein/flixlab/jruby/greeter.rb)
+and [greeter.clj](src/clojurelib/resources/dev/wstein/flixlab/clojure/greeter.clj).
 
 Each sibling compiles in its own Gradle source set (`kotlinlib`, `scalalib`,
-`groovylib`, `jrubylib` -- see build.gradle.kts) into its own jar under
+`groovylib`, `jrubylib`, `clojurelib` -- see build.gradle.kts) into its own jar
+under
 `vendor/`, referenced by `flix.toml`'s `[jar-dependencies]`; each language's
 runtime library reaches Flix's classpath separately via
 `[mvn-dependencies]`, the same two-step wiring `javalib`'s jar already used.
@@ -127,9 +125,15 @@ java -cp "$runtime_cp" Main
 # Hello Scala!
 # Hello Groovy!
 # Hello JRuby!
+# Hello Clojure!
 # 41
 # Hello World!
 ```
+
+`./gradlew testSpock` runs a Spock specification against that packaged JVM
+program. It verifies the Java callback, the Clojure greeting, and that the
+Java jar contains no compile-only Flix stub. The task is also part of
+`./gradlew check`.
 
 ## Datalog + Java interop demo
 

@@ -44,10 +44,8 @@ authors     = ["John Doe <john@example.com>"]
 # compiles Java against them and refreshes the project-local Flix cache. Rebuild with
 # `./gradlew javalibJar` after editing the Java greeter or its exported Flix callback.
 #
-# The four jars below are Kotlin/Scala/Groovy/JRuby siblings of javalib's Greeter, one language per
-# jar -- see src/kotlinlib, src/scalalib, src/groovylib, src/jrubylib and each language's own
-# `*libJar` Gradle task. Rebuild all of them with `./gradlew kotlinlibJar scalalibJar groovylibJar
-# jrubylibJar` after editing any of them.
+# The five jars below are Kotlin/Scala/Groovy/JRuby/Clojure siblings of javalib's Greeter, one
+# language per jar. Rebuild all greeters with `./gradlew libJars` after editing any of them.
 #
 # org.openrewrite:*:0.1.0-SNAPSHOT, a private fork not published to Maven
 # Central. Vendored under vendor/rewrite/ -- see vendor/README.md.

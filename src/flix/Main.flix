@@ -59,28 +59,28 @@ def helloFromJava(): String \ IO =
     Greeter.greeting()
 
 ///
-/// Same as `helloFromJava`, but into the Kotlin sibling.
+/// Calls the Kotlin greeter.
 /// See src/kotlinlib/dev/wstein/flixlab/kotlin/Greeter.kt.
 ///
 def helloFromKotlin(): String \ IO =
     KotlinGreeter.greeting()
 
 ///
-/// Same as `helloFromJava`, but into the Scala sibling.
+/// Calls the Scala greeter.
 /// See src/scalalib/dev/wstein/flixlab/scala/Greeter.scala.
 ///
 def helloFromScala(): String \ IO =
     ScalaGreeter.greeting()
 
 ///
-/// Same as `helloFromJava`, but into the Groovy sibling.
+/// Calls the Groovy greeter.
 /// See src/groovylib/dev/wstein/flixlab/groovy/Greeter.groovy.
 ///
 def helloFromGroovy(): String \ IO =
     GroovyGreeter.greeting()
 
 ///
-/// Same as `helloFromJava`, but into the JRuby sibling, which boots an embedded JRuby runtime.
+/// Calls the JRuby greeter, which boots an embedded JRuby runtime.
 /// See src/jrubylib/java/dev/wstein/flixlab/jruby/Greeter.java.
 ///
 def helloFromJRuby(): String \ IO =
