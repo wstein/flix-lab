@@ -5,7 +5,11 @@
 artifact/
 build/
 lib/
+/bin/
 crash_report_*.txt
+
+# Local IDE memory
+.junie/
 
 ### Java ###
 # Compiled class file
