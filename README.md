@@ -24,7 +24,14 @@ export FLIX_JAR="$FLIX_FORK_JAR"
 
 `FLIX_JAR` selects the fork for `./flixw`; `FLIX_FORK_JAR` selects it for
 Gradle's stub task and `scripts/check-java-round-trip`. These overrides do not
-change the committed upstream pin. Without `FLIX_JAR`, `./flixw` uses that pin.
+change the committed upstream pin. Without an override or local selection,
+`./flixw` uses that pin.
+For a persistent choice on this machine, after building the sibling fork, run
+`./flixw pin --local ../flix-fork`. This writes an ignored
+`.flixw/local/compiler.toml`; subsequent `./flixw` commands use that jar without
+`FLIX_JAR`. Run `./flixw pin --stock` to return to the committed pin. A fresh
+checkout still uses the upstream pin until it selects a local fork or sets
+`FLIX_JAR`.
 The separate [packages.lock](packages.lock) records Flix package dependency
 digests; it currently has no entries because this project declares no Flix
 package dependencies.
