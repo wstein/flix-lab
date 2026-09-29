@@ -3,7 +3,7 @@ name        = "flix-lab"
 description = "test"
 version     = "0.1.0"
 flix        = "0.75.1"
-authors     = ["John Doe <john@example.com>"]
+authors     = ["Werner Stein <werner.stein@gmail.com>"]
 
 # Transitive dependencies of the vendored org.openrewrite jars below
 # (see [jar-dependencies]), resolvable from Maven Central.
