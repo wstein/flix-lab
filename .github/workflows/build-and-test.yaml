@@ -16,7 +16,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: wstein/flix-fork
-          ref: 4c2fc0b14d99d6825a000ceb5af813d55b297f26
+          ref: c981884efdc3fd55328ab5b1f75ce54b52856e3f
           path: flix-fork
 
       - name: Install JDK 21
