@@ -1,5 +1,9 @@
 # flix-lab
 
+[![Java 21](https://img.shields.io/badge/Java-21-007396?logo=openjdk&logoColor=white)](build.gradle.kts)
+[![Flix fork required](https://img.shields.io/badge/Flix-fork%20required-6C5CE7)](scripts/flix-fork)
+[![Java round trip check](https://img.shields.io/badge/interop-round%20trip%20check-2EA44F)](scripts/check-java-round-trip)
+
 A small Flix command-line program that greets a name passed on the command
 line.
 
