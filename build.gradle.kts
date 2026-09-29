@@ -71,6 +71,11 @@ sourceSets {
     create("jrubylib") {
         java.srcDir("src/jrubylib/java")
     }
+    // Clojure source is a classpath resource; a small Java class supplies the static method Flix
+    // can import. Keep both apart from the other greeters' compile classpaths.
+    create("clojurelib") {
+        java.srcDir("src/clojurelib/java")
+    }
     // PortsCliTest lives here rather than the default `test` source set, which compiles against
     // `main`'s classpath -- the same toxic mix of unrelated dependencies that had to be kept out
     // of `ports` above. It only needs JUnit: it drives each port as a subprocess (see its own doc
@@ -164,11 +169,26 @@ val jrubylibJar by tasks.registering(Jar::class) {
     from(sourceSets.named("jrubylib").get().output)
 }
 
+val clojurelibJar by tasks.registering(Jar::class) {
+    group = "build"
+    description = "Packages the Clojure greeter and its Java entry point for Flix."
+    archiveFileName.set("flixlab-clojurelib.jar")
+    destinationDirectory.set(layout.projectDirectory.dir("vendor/clojurelib"))
+    from(sourceSets.named("clojurelib").get().output)
+    // Flix caches local file URLs without refreshing them, and cannot download a missing file URL.
+    doLast {
+        copy {
+            from(archiveFile)
+            into(layout.projectDirectory.dir("lib/external"))
+        }
+    }
+}
+
 // One place to (re)build everything flix.toml's [jar-dependencies] points at.
 tasks.register("libJars") {
     group = "build"
-    description = "Packages javalib and its Kotlin/Scala/Groovy/JRuby siblings for Flix's classpath."
-    dependsOn(javalibJar, kotlinlibJar, scalalibJar, groovylibJar, jrubylibJar)
+    description = "Packages the JVM greeters for Flix's classpath."
+    dependsOn(javalibJar, kotlinlibJar, scalalibJar, groovylibJar, jrubylibJar, clojurelibJar)
 }
 
 dependencies {
@@ -231,6 +251,8 @@ dependencies {
     // task below produces -- like kotlinlib/scalalib/groovylib's runtimes, it reaches Flix's
     // classpath separately via flix.toml's [mvn-dependencies].
     "jrubylibImplementation"("org.jruby:jruby-complete:10.0.4.0")
+
+    "clojurelibImplementation"("org.clojure:clojure:1.12.6")
 }
 
 tasks {
@@ -268,6 +290,10 @@ tasks {
     }
 
     named<JavaCompile>("compileJrubylibJava") {
+        options.release.set(21)
+    }
+
+    named<JavaCompile>("compileClojurelibJava") {
         options.release.set(21)
     }
 

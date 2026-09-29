@@ -5,7 +5,7 @@ set -euo pipefail
 project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$project_root"
 
-./gradlew javalibJar --console=plain
+./gradlew libJars --console=plain
 ./scripts/flix-fork build-jar --yes
 
 runtime_cp="$project_root/artifact/flix-lab.jar"
@@ -17,6 +17,10 @@ output="$(java -cp "$runtime_cp" Main)"
 first_line="${output%%$'\n'*}"
 if [[ "$first_line" != "Hello Java via Flix!" ]]; then
     printf 'Unexpected Java round-trip greeting: %s\n' "$first_line" >&2
+    exit 1
+fi
+if [[ $'\n'"$output"$'\n' != *$'\nHello Clojure!\n'* ]]; then
+    printf 'Clojure greeting missing from packaged run.\n' >&2
     exit 1
 fi
 printf 'Java round trip passed: %s\n' "$first_line"

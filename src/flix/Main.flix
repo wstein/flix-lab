@@ -3,6 +3,7 @@ import dev.wstein.flixlab.kotlin.{Greeter => KotlinGreeter}
 import dev.wstein.flixlab.scala.{Greeter => ScalaGreeter}
 import dev.wstein.flixlab.groovy.{Greeter => GroovyGreeter}
 import dev.wstein.flixlab.jruby.{Greeter => JRubyGreeter}
+import dev.wstein.flixlab.clojure.{Greeter => ClojureGreeter}
 
 use Sys.Env
 use Sys.Exit
@@ -85,6 +86,12 @@ def helloFromGroovy(): String \ IO =
 def helloFromJRuby(): String \ IO =
     JRubyGreeter.greeting()
 
+/// Calls the Clojure namespace through its small Java entry point.
+/// See src/clojurelib/resources/dev/wstein/flixlab/clojure/greeter.clj.
+///
+def helloFromClojure(): String \ IO =
+    ClojureGreeter.greeting()
+
 ///
 /// Calls nothing outside this file, so the classes compiled from it draw on a single source and
 /// `Smap.build()` emits no `SourceDebugExtension`. That is the shape row 9 of the native-debugger
@@ -109,6 +116,7 @@ def main(): Unit \ { IO, Env, Exit } =
     println(helloFromScala());
     println(helloFromGroovy());
     println(helloFromJRuby());
+    println(helloFromClojure());
     println(noSmapFixture(20));
     let args = Env.getArgs();
     match GetOpt.getOpt(ArgOrder.Permute, options(), args) {
