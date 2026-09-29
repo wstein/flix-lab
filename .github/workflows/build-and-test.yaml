@@ -16,7 +16,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: wstein/flix-fork
-          ref: c981884efdc3fd55328ab5b1f75ce54b52856e3f
+          ref: 1ec5d1aa9b788cde1ba0dc05411d75db660482df
           path: flix-fork
 
       - name: Install JDK 21
@@ -38,3 +38,4 @@ jobs:
         run: |
           ./gradlew check --console=plain
           ./scripts/check-java-round-trip
+          ./scripts/check-typed-boundary-prototype

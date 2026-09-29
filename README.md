@@ -166,6 +166,17 @@ program. It verifies the Java callback, the Clojure greeting, and that the
 Java jar contains no compile-only Flix stub. The task is also part of
 `./gradlew check`.
 
+## Typed-boundary prototype
+
+[`experiments/typed-boundary`](experiments/typed-boundary/README.md) probes ADR 3's recursive
+`JavaResult[List[Int32]]` conversion with the current `@Export` path. Its check compiles a Java
+caller against staged stubs, verifies the real facade's `List<Integer>` generic signature, and
+runs the caller without stubs:
+
+```console
+./scripts/check-typed-boundary-prototype
+```
+
 ## Datalog + Java interop demo
 
 [src/flix/DatalogYamlDemo.flix](src/flix/DatalogYamlDemo.flix) is a second, independent

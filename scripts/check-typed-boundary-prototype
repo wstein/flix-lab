@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Proves ADR 3's library conversion and Java ABI using the current @Export path.
+set -euo pipefail
+
+project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$project_root"
+
+./gradlew libJars --console=plain
+
+stub_file="build/flix-stubs/dev/flix/gen/TypedBoundaryProof.java"
+if ! grep -Fq 'java.util.List<java.lang.Integer> boxedInts(int arg0)' "$stub_file"; then
+    printf 'The staged stub does not declare List<Integer>.\n' >&2
+    exit 1
+fi
+
+caller_classes="build/typed-boundary-caller"
+mkdir -p "$caller_classes"
+javac --release 21 -cp build/flix-stub-classes -d "$caller_classes" \
+    experiments/typed-boundary/BoundaryCaller.java
+
+./scripts/flix-fork build-jar --yes
+
+actual_api="$(javap -v -p -classpath artifact/flix-lab.jar dev.flix.gen.TypedBoundaryProof)"
+if [[ "$actual_api" != *'java.util.List<java.lang.Integer> boxedInts(int)'* ]] ||
+   [[ "$actual_api" != *'descriptor: (I)Ljava/util/List;'* ]] ||
+   [[ "$actual_api" != *'// (I)Ljava/util/List<Ljava/lang/Integer;>;'* ]]; then
+    printf 'The real facade does not retain the expected descriptor and List<Integer> Signature.\n' >&2
+    exit 1
+fi
+
+runtime_cp="$project_root/artifact/flix-lab.jar:$project_root/$caller_classes"
+while IFS= read -r -d '' jar_path; do
+    runtime_cp="$runtime_cp:$jar_path"
+done < <(find "$project_root/lib" -type f -name '*.jar' -print0)
+
+# The stub classes are intentionally absent from this classpath.
+java -cp "$runtime_cp" dev.wstein.flixlab.boundary.BoundaryCaller
